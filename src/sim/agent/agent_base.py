@@ -1,3 +1,4 @@
+from math import e
 import os
 from dotenv import load_dotenv
 from data.data_manager import data_manager
@@ -35,37 +36,26 @@ class HEMSAgent(Agent):
     #TODO Implement Wind Production Configuration
     def validate_actions(self, actions: dict, cur_capacity, cur_hour, battery_max_capacity):
         res = True
+        acc_consumption, acc_production, acc_battery = 0, 0, 0
 
         price, solar_production, wind_production, consumption = data_manager.get_model_data_entry(cur_hour)
 
-        for label, actions in actions.items():
-            if label == "consumption_action":
-                acc = 0
-                for action, value in actions.items():
-                    acc += value
-                
-                if acc != consumption:
-                    return False
-                            
-
-            elif label == "production_action":
-                acc = 0
-                for action, value in actions.items():
-                    acc += value
-                
-                if acc != solar_production:
-                    return False
-
-            elif label == "battery_actions":
-                acc = 0
-                for action, value in actions.items():
-                    if action in ["production_to_battery", "grid_to_battery"]:
-                        acc += value
-                    elif action in ["battery_to_consumption", "battery_to_grid"]:
-                        acc -= value
-
-                if acc + cur_capacity > battery_max_capacity or acc + cur_capacity < 0:
-                    return False
+        for key, value in actions.items():
+            if key == "production_to_consumption" or key == "production_to_battery" or key == "production_to_grid":
+                acc_production += value
+            elif key == "grid_to_consumption" or key == "production_to_consumption" or key == "battery_to_consumption":
+                acc_consumption += value
+            elif key == "grid_to_battery" or key == "production_to_battery":
+                acc_battery += value
+            elif key == "battery_to_consumption" or key == "battery_to_grid":
+                acc_battery -= value
+        
+        if acc_consumption < consumption:
+            res = False
+        if acc_production > solar_production:
+            res = False
+        if cur_capacity + acc_battery > battery_max_capacity or cur_capacity + acc_battery < 0:
+            res = False
 
         return res
         
