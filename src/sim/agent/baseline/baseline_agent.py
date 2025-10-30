@@ -1,8 +1,7 @@
 import copy
 from sim.data.data_manager import data_manager
 
-
-class BaselineModel:
+class BaselineAgent:
     def __init__(self, battery_max_capacity=10, tariff = 0.75):
         self.battery_max_capacity = battery_max_capacity
         self.tariff = tariff
@@ -12,7 +11,8 @@ class BaselineModel:
         self.cur_capacity = cur_capacity
         
         self.price, self.solar_production, self.wind_production, self.consumption = data_manager.get_model_data_entry(cur_hour)
-    
+
+        return self.policy()
 
     #TODO Implement Wind Production Configuration
     def policy(self):
@@ -78,7 +78,6 @@ class BaselineModel:
             - production_to_battery
             - production_to_grid
 
-
         battery_action:
             - production_to_battery
             - grid_to_battery
@@ -95,4 +94,4 @@ class BaselineModel:
     def battery_action(self, label, energy):
         self.actions["battery_actions"].append({label: energy})
 
-baseline_model = BaselineModel()
+baseline_agent = BaselineAgent()
