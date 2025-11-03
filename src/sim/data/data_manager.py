@@ -1,14 +1,18 @@
 import os
 import pandas as pd
+from dotenv import load_dotenv
 
 try:
     from .api_manager import api_manager
 except ImportError:
     from api_manager import api_manager
 
+load_dotenv()
+
+DATE_DEFAULT_DATE = os.getenv("DATE", "2023-01-01")
 
 class DataManager:
-    def __init__(self, smooth_window=3):
+    def __init__(self, smooth_window=3, date=DATE_DEFAULT_DATE):
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.datafiles_dir = os.path.join(self.base_dir, "datafiles")
 
@@ -17,7 +21,8 @@ class DataManager:
         self.wind_data_filename = "wind_production.csv"
         self.consumption_data_filename = "consumption.csv"
         
-        self.smooth_window = smooth_window  
+        self.smooth_window = smooth_window
+        self.start_data_collection(date)
 
         
     def start_data_collection(self, date: str):
@@ -37,14 +42,14 @@ class DataManager:
         print(f"Consumption: \n{self.df_consumption.head()}")
         return True
 
-    def get_model_data_entry(self, date: str = None, time_stamp: str = ""):
-        if time_stamp == "":
+    def get_model_data_entry(self, time_stamp: tuple = None, date: str = None):
+        if time_stamp is None:
             raise ValueError("Time stamp must be provided")
         
         if date is not None and (not hasattr(self, 'date') or self.date != date):
             self.start_data_collection(date)
 
-        hour, minute = self.parse_timestamp(time_stamp)
+        hour, minute = time_stamp
 
         price = self.calculate_price_interval(hour, minute)
         solar_production = self.calculate_solar_production_interval(hour, minute)
@@ -113,19 +118,24 @@ class DataManager:
             (self.df_solar_production['total_minutes'] <= new_total_minutes)
         interval_data = self.df_solar_production[mask]
         
-        production_col = self.df_solar_production.columns[1] 
-        
-        start_value = self.df_solar_production.set_index('total_minutes')[production_col].reindex(
-            range(last_total_minutes, new_total_minutes + 1)
-        ).interpolate(method='linear')[last_total_minutes]
-        
-        end_value = self.df_solar_production.set_index('total_minutes')[production_col].reindex(
-            range(last_total_minutes, new_total_minutes + 1)
-        ).interpolate(method='linear')[new_total_minutes]
+        production_col = self.df_solar_production.columns[1]
         
         if len(interval_data) > 0:
             avg_power = interval_data[production_col].mean()
         else:
+            all_minutes = sorted(self.df_solar_production['total_minutes'].unique())
+            max_minute = max(all_minutes)
+            min_minute = min(all_minutes)
+            
+            clamped_last = max(min_minute, min(last_total_minutes, max_minute))
+            clamped_new = max(min_minute, min(new_total_minutes, max_minute))
+            
+            indexed_production = self.df_solar_production.set_index('total_minutes')[production_col]
+            reindexed = indexed_production.reindex(all_minutes).interpolate(method='linear')
+            
+            start_value = reindexed.reindex([clamped_last], method='nearest')[clamped_last]
+            end_value = reindexed.reindex([clamped_new], method='nearest')[clamped_new]
+            
             avg_power = (start_value + end_value) / 2
         
         energy_production = avg_power * interval_hours
@@ -149,13 +159,18 @@ class DataManager:
         if len(interval_data) > 0:
             avg_power = interval_data[production_col].mean()
         else:
-            start_value = self.df_wind_production.set_index('total_minutes')[production_col].reindex(
-                range(last_total_minutes, new_total_minutes + 1)
-            ).interpolate(method='linear')[last_total_minutes]
+            all_minutes = sorted(self.df_wind_production['total_minutes'].unique())
+            max_minute = max(all_minutes)
+            min_minute = min(all_minutes)
             
-            end_value = self.df_wind_production.set_index('total_minutes')[production_col].reindex(
-                range(last_total_minutes, new_total_minutes + 1)
-            ).interpolate(method='linear')[new_total_minutes]
+            clamped_last = max(min_minute, min(last_total_minutes, max_minute))
+            clamped_new = max(min_minute, min(new_total_minutes, max_minute))
+            
+            indexed_production = self.df_wind_production.set_index('total_minutes')[production_col]
+            reindexed = indexed_production.reindex(all_minutes).interpolate(method='linear')
+            
+            start_value = reindexed.reindex([clamped_last], method='nearest')[clamped_last]
+            end_value = reindexed.reindex([clamped_new], method='nearest')[clamped_new]
             
             avg_power = (start_value + end_value) / 2
         
@@ -180,13 +195,18 @@ class DataManager:
         if len(interval_data) > 0:
             avg_power = interval_data[consumption_col].mean()
         else:
-            start_value = self.df_consumption.set_index('total_minutes')[consumption_col].reindex(
-                range(last_total_minutes, new_total_minutes + 1)
-            ).interpolate(method='linear')[last_total_minutes]
+            all_minutes = sorted(self.df_consumption['total_minutes'].unique())
+            max_minute = max(all_minutes)
+            min_minute = min(all_minutes)
             
-            end_value = self.df_consumption.set_index('total_minutes')[consumption_col].reindex(
-                range(last_total_minutes, new_total_minutes + 1)
-            ).interpolate(method='linear')[new_total_minutes]
+            clamped_last = max(min_minute, min(last_total_minutes, max_minute))
+            clamped_new = max(min_minute, min(new_total_minutes, max_minute))
+            
+            indexed_consumption = self.df_consumption.set_index('total_minutes')[consumption_col]
+            reindexed = indexed_consumption.reindex(all_minutes).interpolate(method='linear')
+            
+            start_value = reindexed.reindex([clamped_last], method='nearest')[clamped_last]
+            end_value = reindexed.reindex([clamped_new], method='nearest')[clamped_new]
             
             avg_power = (start_value + end_value) / 2
         
@@ -209,13 +229,19 @@ class DataManager:
         if len(interval_data) > 0:
             mean_price = interval_data[price_col].mean()
         else:
-            start_value = self.df_price_data.set_index('total_minutes')[price_col].reindex(
-                range(last_total_minutes, new_total_minutes + 1)
-            ).interpolate(method='linear')[last_total_minutes]
+            all_minutes = sorted(self.df_price_data['total_minutes'].unique())
+            max_minute = max(all_minutes)
+            min_minute = min(all_minutes)
             
-            end_value = self.df_price_data.set_index('total_minutes')[price_col].reindex(
-                range(last_total_minutes, new_total_minutes + 1)
-            ).interpolate(method='linear')[new_total_minutes]
+            clamped_last = max(min_minute, min(last_total_minutes, max_minute))
+            clamped_new = max(min_minute, min(new_total_minutes, max_minute))
+            
+            indexed_prices = self.df_price_data.set_index('total_minutes')[price_col]
+            
+            reindexed = indexed_prices.reindex(all_minutes).interpolate(method='linear')
+            
+            start_value = reindexed.reindex([clamped_last], method='nearest')[clamped_last]
+            end_value = reindexed.reindex([clamped_new], method='nearest')[clamped_new]
             
             mean_price = (start_value + end_value) / 2
 

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from mesa import Model
 from mesa.datacollection import DataCollector
 
-from ..agent.agent_base import HEMSAgent
+from sim.agent.agent_base import HEMSAgent
 
 load_dotenv()
 hour_interval, minute_interval = os.getenv("INTERVAL", (1, 00))
@@ -16,14 +16,14 @@ def get_steps():
 def update_time(current_time):
     hour, minute = current_time
 
-    hour += hour_interval
     minute += minute_interval
+    hour += hour_interval
 
     if minute >= 60:
         minute -= 60
         hour += 1
     if hour >= 24:
-        hour = 0
+        hour -= 24 
 
     return (hour, minute)
 
@@ -57,3 +57,7 @@ class HEMSModel(Model):
         self.cur_hour = update_time(self.cur_hour)
         self.agents.do("step")
         self.datacollector.collect(self)
+
+
+if __name__ == "__main__":
+    print("This is the HEMS Model module.")

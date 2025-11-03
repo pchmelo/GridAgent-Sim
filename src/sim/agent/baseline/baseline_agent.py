@@ -10,7 +10,7 @@ class BaselineAgent:
         self.balance = balance
         self.cur_capacity = cur_capacity
         
-        self.price, self.solar_production, self.wind_production, self.consumption = data_manager.get_model_data_entry(cur_hour)
+        self.price, self.solar_production, self.wind_production, self.consumption = data_manager.get_model_data_entry(time_stamp=cur_hour)
 
         return self.policy()
 

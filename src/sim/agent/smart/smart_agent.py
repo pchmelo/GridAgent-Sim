@@ -111,7 +111,7 @@ class SACAgent:
         
     def get_state(self, balance, cur_capacity, cur_hour):
         """Convert environment variables to state vector"""
-        price, solar_production, wind_production, consumption = data_manager.get_model_data_entry(cur_hour)
+        price, solar_production, wind_production, consumption = data_manager.get_model_data_entry(time_stamp=cur_hour)
         state = np.array([
             balance / 1000.0,  # Normalize balance
             cur_capacity / self.battery_max_capacity,  # Normalized capacity
@@ -146,7 +146,7 @@ class SACAgent:
         action[5]: grid_to_cons
         action[6]: grid_to_battery
         """
-        price, solar_production, wind_production, consumption = data_manager.get_model_data_entry(cur_hour)
+        price, solar_production, wind_production, consumption = data_manager.get_model_data_entry(time_stamp=cur_hour)
         
         actions_dict = {
             "consumption_action": {},
