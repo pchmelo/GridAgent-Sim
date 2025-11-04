@@ -1,8 +1,14 @@
-import copy
+import os
+from dotenv import load_dotenv
+
 from sim.data.data_manager import data_manager
 
+load_dotenv()
+max_capacity = os.getenv("MAX_CAPACITY")
+tariff = os.getenv("TARIFF", 0.75)
+
 class BaselineAgent:
-    def __init__(self, battery_max_capacity=10, tariff = 0.75):
+    def __init__(self, battery_max_capacity = max_capacity, tariff = tariff):
         self.battery_max_capacity = battery_max_capacity
         self.tariff = tariff
 

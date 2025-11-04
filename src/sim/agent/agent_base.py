@@ -1,14 +1,11 @@
-from email.mime import base
-from math import e
 import os
 from dotenv import load_dotenv
 from sim.data.data_manager import data_manager
 
 from mesa import Agent
 
-
 from sim.agent.baseline.baseline_agent import baseline_agent
-from sim.agent.smart.smart_agent import smart_decision
+#from sim.agent.smart.smart_agent import smart_decision
 
 load_dotenv()
 agent_type = os.getenv("AGENT_TYPE", "smart")
@@ -23,13 +20,15 @@ class HEMSAgent(Agent):
         # Make a decision based on the agent type and validate it
         while True:
             if agent_type == "smart":
-                actions, new_balance, new_capacity = smart_decision(m.balance, m.cur_capacity, m.cur_hour)
+                #actions, new_balance, new_capacity = smart_decision(m.balance, m.cur_capacity, m.cur_hour)
                 if self.validate_actions(actions, m.cur_capacity, m.cur_hour, m.battery_capacity):
                     break
-            else:
+            elif agent_type == "basic":
                 actions, new_balance, new_capacity = baseline_agent.baseline_decision(m.balance, m.cur_capacity, m.cur_hour)
                 if self.validate_actions(actions, m.cur_capacity, m.cur_hour, m.battery_capacity):
                     break
+            else:
+                raise ValueError(f"Unknown agent type: {agent_type}")
 
         # Update model state based on decision
         m.balance = new_balance
@@ -40,7 +39,7 @@ class HEMSAgent(Agent):
         res = True
         acc_consumption, acc_production, acc_battery = 0, 0, 0
 
-        price, solar_production, wind_production, consumption = data_manager.get_model_data_entry(cur_hour)
+        _, solar_production, wind_production, consumption = data_manager.get_model_data_entry(cur_hour)
 
         for action_dict in actions:
             for key, value in action_dict.items():
@@ -61,5 +60,3 @@ class HEMSAgent(Agent):
             res = False
 
         return res
-        
-        

@@ -7,8 +7,8 @@ from mesa.datacollection import DataCollector
 from sim.agent.agent_base import HEMSAgent
 
 load_dotenv()
-hour_interval, minute_interval = os.getenv("INTERVAL", (1, 00))
-max_capacity = os.getenv("MAX_CAPACITY", 100)
+hour_interval, minute_interval = os.getenv("INTERVAL", (1, 0))
+max_capacity = os.getenv("MAX_CAPACITY")
 
 def get_steps():
     return 24 * 60 // (hour_interval * 60 + minute_interval)
