@@ -36,10 +36,12 @@ class DataManager:
             api_manager.generate_data(self.date)
         
         self.get_data_for_date()
+        """
         print(f"Solar production: \n{self.df_solar_production.head()}")
         print(f"Wind production: \n{self.df_wind_production.head()}")
         print(f"Market prices: \n{self.df_price_data.head()}")
         print(f"Consumption: \n{self.df_consumption.head()}")
+        """
         return True
 
     def get_model_data_entry(self, time_stamp: tuple = None, date: str = None):
