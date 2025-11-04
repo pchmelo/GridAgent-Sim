@@ -16,6 +16,7 @@ class LogController:
 
     def __init__(self):
         load_dotenv()
+        self.log_active = os.getenv("LOG_ACTIVE", "TRUE") == "TRUE"
         
         self.baseline_input = os.getenv("BASELINE_INPUT", "FALSE")
 
