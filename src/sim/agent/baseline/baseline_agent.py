@@ -2,12 +2,16 @@ import os
 from dotenv import load_dotenv
 
 from sim.data.data_manager import data_manager
+from log.log_controller import log_controller
 
 load_dotenv()
 max_capacity = os.getenv("MAX_CAPACITY")
 tariff = os.getenv("TARIFF", 0.75)
 
 class BaselineAgent:
+
+    log_type = "baseline_input"
+
     def __init__(self, battery_max_capacity = int(max_capacity), tariff = float(tariff)):
         self.battery_max_capacity = battery_max_capacity
         self.tariff = tariff
@@ -58,6 +62,9 @@ class BaselineAgent:
 
                 self.balance -= current_consumption * self.price * self.tariff
                 self.actions.append({"grid_to_consumption": current_consumption})
+
+
+        log_controller.log_message(f"Baseline Actions: {self.actions}, Balance: {self.balance}, Battery Capacity: {self.cur_capacity}", self.log_type)
 
         return self.actions, self.balance, self.cur_capacity
     
