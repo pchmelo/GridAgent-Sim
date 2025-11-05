@@ -1,6 +1,9 @@
 import requests
 from typing import Dict
+
 import os
+from dotenv import load_dotenv
+
 import pandas as pd
 import random
 
@@ -82,7 +85,7 @@ class APIManager:
                     break
                 skip_flag = True
         
-        solar_series_kw = [value * 1_000 / 1_000 for value in solar_series]  
+        solar_series_kw = [value * 1_000 / 500_000 for value in solar_series]  
         wind_series_kw = [value * 1_000 / 500_000 for value in wind_series] 
         
         df_solar = pd.DataFrame({
@@ -219,7 +222,8 @@ class APIManager:
 api_manager = APIManager()
 
 if __name__ == "__main__":
-    date = "2025-01-25"
+    load_dotenv()
+    date = os.getenv("DATE", "2025-02-25")
 
     print("===========TEST API CALLS============")
     print("Daily Prices:")

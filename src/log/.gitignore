@@ -1,4 +1,6 @@
 files/log_*.txt
+results/basic/*.csv
+results/smart/*.csv
 __pycache__/
 .idea/
 .vscode/

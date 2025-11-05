@@ -22,6 +22,9 @@ class BaselineAgent:
         
         self.price, self.solar_production, self.wind_production, self.consumption = data_manager.get_model_data_entry(time_stamp=cur_hour)
 
+        log_controller.log_message(f"\nBaseline Decision - Hour: {cur_hour}, Balance: {balance}, Current Capacity: {cur_capacity}", self.log_type)
+        log_controller.log_message(f"Baseline Data - Price: {self.price}, Solar Production: {self.solar_production}, Wind Production: {self.wind_production}, Consumption: {self.consumption}", self.log_type)
+
         return self.policy()
 
     #TODO Implement Wind Production Configuration
@@ -63,6 +66,8 @@ class BaselineAgent:
                 self.balance -= current_consumption * self.price * self.tariff
                 self.actions.append({"grid_to_consumption": current_consumption})
 
+
+        print(f"{self.cur_capacity}")
 
         log_controller.log_message(f"Baseline Actions: {self.actions}, Balance: {self.balance}, Battery Capacity: {self.cur_capacity}", self.log_type)
 

@@ -58,9 +58,10 @@ class DataManager:
         wind_production = self.calculate_wind_production_interval(hour, minute)
         consumption = self.calculate_consumption_interval(hour, minute)
 
-        self.last_time_stamp = (hour, minute)
-
         return price, solar_production, wind_production, consumption
+
+    def update_time_stamp(self, new_time_stamp: tuple):
+        self.last_time_stamp = new_time_stamp
 
     def get_data_for_date(self):
         self.df_solar_production = pd.read_csv(os.path.join(
@@ -72,41 +73,15 @@ class DataManager:
         self.df_consumption = pd.read_csv(os.path.join(
             self.datafiles_dir, self.date, self.consumption_data_filename))
         
-        self.df_solar_production['datetime'] = pd.to_datetime(
-            self.df_solar_production.iloc[:, 0], format='%H:%M'
-        )
-        self.df_solar_production['total_minutes'] = (
-            self.df_solar_production['datetime'].dt.hour * 60 + 
-            self.df_solar_production['datetime'].dt.minute
-        )
+        def parse_time_with_24(time_str):
+            hour, minute = map(int, time_str.split(':'))
+            total_minutes = hour * 60 + minute
+            return total_minutes
         
-        self.df_wind_production['datetime'] = pd.to_datetime(
-            self.df_wind_production.iloc[:, 0], format='%H:%M'
-        )
-        self.df_wind_production['total_minutes'] = (
-            self.df_wind_production['datetime'].dt.hour * 60 + 
-            self.df_wind_production['datetime'].dt.minute
-        )
-        
-        self.df_price_data['datetime'] = pd.to_datetime(
-            self.df_price_data.iloc[:, 0], format='%H:%M'
-        )
-        self.df_price_data['total_minutes'] = (
-            self.df_price_data['datetime'].dt.hour * 60 + 
-            self.df_price_data['datetime'].dt.minute
-        )
-        
-        self.df_consumption['datetime'] = pd.to_datetime(
-            self.df_consumption.iloc[:, 0], format='%H:%M'
-        )
-        self.df_consumption['total_minutes'] = (
-            self.df_consumption['datetime'].dt.hour * 60 + 
-            self.df_consumption['datetime'].dt.minute
-        )
-        
-    def parse_timestamp(self, timestamp: str):
-        hour, minute = map(int, timestamp.split(":"))
-        return hour, minute
+        self.df_solar_production['total_minutes'] = self.df_solar_production.iloc[:, 0].apply(parse_time_with_24)
+        self.df_wind_production['total_minutes'] = self.df_wind_production.iloc[:, 0].apply(parse_time_with_24)
+        self.df_price_data['total_minutes'] = self.df_price_data.iloc[:, 0].apply(parse_time_with_24)
+        self.df_consumption['total_minutes'] = self.df_consumption.iloc[:, 0].apply(parse_time_with_24)
     
     def calculate_solar_production_interval(self, new_hour: int, new_minute: int):
         last_hour, last_minute = self.last_time_stamp
@@ -114,11 +89,26 @@ class DataManager:
         last_total_minutes = last_hour * 60 + last_minute
         new_total_minutes = new_hour * 60 + new_minute
         
+        if new_total_minutes < last_total_minutes:
+            new_total_minutes += 1440
+        
         interval_hours = (new_total_minutes - last_total_minutes) / 60
         
-        mask = (self.df_solar_production['total_minutes'] > last_total_minutes) & \
-            (self.df_solar_production['total_minutes'] <= new_total_minutes)
-        interval_data = self.df_solar_production[mask]
+        if new_total_minutes > 1440:
+            mask1 = (self.df_solar_production['total_minutes'] > last_total_minutes) & \
+                   (self.df_solar_production['total_minutes'] <= 1440)
+            interval_data1 = self.df_solar_production[mask1]
+            
+            remainder_minutes = new_total_minutes - 1440
+            mask2 = (self.df_solar_production['total_minutes'] > 0) & \
+                   (self.df_solar_production['total_minutes'] <= remainder_minutes)
+            interval_data2 = self.df_solar_production[mask2]
+            
+            interval_data = pd.concat([interval_data1, interval_data2])
+        else:
+            mask = (self.df_solar_production['total_minutes'] > last_total_minutes) & \
+                  (self.df_solar_production['total_minutes'] <= new_total_minutes)
+            interval_data = self.df_solar_production[mask]
         
         production_col = self.df_solar_production.columns[1]
         
@@ -130,7 +120,7 @@ class DataManager:
             min_minute = min(all_minutes)
             
             clamped_last = max(min_minute, min(last_total_minutes, max_minute))
-            clamped_new = max(min_minute, min(new_total_minutes, max_minute))
+            clamped_new = max(min_minute, min(new_total_minutes % 1440, max_minute))
             
             indexed_production = self.df_solar_production.set_index('total_minutes')[production_col]
             reindexed = indexed_production.reindex(all_minutes).interpolate(method='linear')
@@ -150,11 +140,26 @@ class DataManager:
         last_total_minutes = last_hour * 60 + last_minute
         new_total_minutes = new_hour * 60 + new_minute
         
+        if new_total_minutes < last_total_minutes:
+            new_total_minutes += 1440
+        
         interval_hours = (new_total_minutes - last_total_minutes) / 60
         
-        mask = (self.df_wind_production['total_minutes'] > last_total_minutes) & \
-            (self.df_wind_production['total_minutes'] <= new_total_minutes)
-        interval_data = self.df_wind_production[mask]
+        if new_total_minutes > 1440:
+            mask1 = (self.df_wind_production['total_minutes'] > last_total_minutes) & \
+                   (self.df_wind_production['total_minutes'] <= 1440)
+            interval_data1 = self.df_wind_production[mask1]
+            
+            remainder_minutes = new_total_minutes - 1440
+            mask2 = (self.df_wind_production['total_minutes'] > 0) & \
+                   (self.df_wind_production['total_minutes'] <= remainder_minutes)
+            interval_data2 = self.df_wind_production[mask2]
+            
+            interval_data = pd.concat([interval_data1, interval_data2])
+        else:
+            mask = (self.df_wind_production['total_minutes'] > last_total_minutes) & \
+                  (self.df_wind_production['total_minutes'] <= new_total_minutes)
+            interval_data = self.df_wind_production[mask]
         
         production_col = self.df_wind_production.columns[1]
         
@@ -166,7 +171,7 @@ class DataManager:
             min_minute = min(all_minutes)
             
             clamped_last = max(min_minute, min(last_total_minutes, max_minute))
-            clamped_new = max(min_minute, min(new_total_minutes, max_minute))
+            clamped_new = max(min_minute, min(new_total_minutes % 1440, max_minute))
             
             indexed_production = self.df_wind_production.set_index('total_minutes')[production_col]
             reindexed = indexed_production.reindex(all_minutes).interpolate(method='linear')
@@ -186,11 +191,26 @@ class DataManager:
         last_total_minutes = last_hour * 60 + last_minute
         new_total_minutes = new_hour * 60 + new_minute
         
+        if new_total_minutes < last_total_minutes:
+            new_total_minutes += 1440
+        
         interval_hours = (new_total_minutes - last_total_minutes) / 60
         
-        mask = (self.df_consumption['total_minutes'] > last_total_minutes) & \
-            (self.df_consumption['total_minutes'] <= new_total_minutes)
-        interval_data = self.df_consumption[mask]
+        if new_total_minutes > 1440:
+            mask1 = (self.df_consumption['total_minutes'] > last_total_minutes) & \
+                   (self.df_consumption['total_minutes'] <= 1440)
+            interval_data1 = self.df_consumption[mask1]
+            
+            remainder_minutes = new_total_minutes - 1440
+            mask2 = (self.df_consumption['total_minutes'] > 0) & \
+                   (self.df_consumption['total_minutes'] <= remainder_minutes)
+            interval_data2 = self.df_consumption[mask2]
+            
+            interval_data = pd.concat([interval_data1, interval_data2])
+        else:
+            mask = (self.df_consumption['total_minutes'] > last_total_minutes) & \
+                  (self.df_consumption['total_minutes'] <= new_total_minutes)
+            interval_data = self.df_consumption[mask]
         
         consumption_col = self.df_consumption.columns[1]
         
@@ -202,7 +222,7 @@ class DataManager:
             min_minute = min(all_minutes)
             
             clamped_last = max(min_minute, min(last_total_minutes, max_minute))
-            clamped_new = max(min_minute, min(new_total_minutes, max_minute))
+            clamped_new = max(min_minute, min(new_total_minutes % 1440, max_minute))
             
             indexed_consumption = self.df_consumption.set_index('total_minutes')[consumption_col]
             reindexed = indexed_consumption.reindex(all_minutes).interpolate(method='linear')
@@ -222,9 +242,24 @@ class DataManager:
         last_total_minutes = last_hour * 60 + last_minute
         new_total_minutes = new_hour * 60 + new_minute
         
-        mask = (self.df_price_data['total_minutes'] > last_total_minutes) & \
-            (self.df_price_data['total_minutes'] <= new_total_minutes)
-        interval_data = self.df_price_data[mask]
+        if new_total_minutes < last_total_minutes:
+            new_total_minutes += 1440
+        
+        if new_total_minutes > 1440:
+            mask1 = (self.df_price_data['total_minutes'] > last_total_minutes) & \
+                   (self.df_price_data['total_minutes'] <= 1440)
+            interval_data1 = self.df_price_data[mask1]
+            
+            remainder_minutes = new_total_minutes - 1440
+            mask2 = (self.df_price_data['total_minutes'] > 0) & \
+                   (self.df_price_data['total_minutes'] <= remainder_minutes)
+            interval_data2 = self.df_price_data[mask2]
+            
+            interval_data = pd.concat([interval_data1, interval_data2])
+        else:
+            mask = (self.df_price_data['total_minutes'] > last_total_minutes) & \
+                  (self.df_price_data['total_minutes'] <= new_total_minutes)
+            interval_data = self.df_price_data[mask]
         
         price_col = self.df_price_data.columns[1]
         
@@ -236,7 +271,7 @@ class DataManager:
             min_minute = min(all_minutes)
             
             clamped_last = max(min_minute, min(last_total_minutes, max_minute))
-            clamped_new = max(min_minute, min(new_total_minutes, max_minute))
+            clamped_new = max(min_minute, min(new_total_minutes % 1440, max_minute))
             
             indexed_prices = self.df_price_data.set_index('total_minutes')[price_col]
             
@@ -248,7 +283,6 @@ class DataManager:
             mean_price = (start_value + end_value) / 2
 
         return mean_price
-        
 
 data_manager = DataManager()
 
