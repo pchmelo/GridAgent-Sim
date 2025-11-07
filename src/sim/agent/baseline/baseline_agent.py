@@ -5,14 +5,14 @@ from sim.data.data_manager import data_manager
 from log.log_controller import log_controller
 
 load_dotenv()
-max_capacity = os.getenv("MAX_CAPACITY")
-tariff = os.getenv("TARIFF", 0.75)
+max_capacity = int(os.getenv("MAX_CAPACITY"))
+tariff = float(os.getenv("TARIFF", 0.75))
 
 class BaselineAgent:
 
     log_type = "baseline_input"
 
-    def __init__(self, battery_max_capacity = int(max_capacity), tariff = float(tariff)):
+    def __init__(self, battery_max_capacity = max_capacity, tariff = tariff):
         self.battery_max_capacity = battery_max_capacity
         self.tariff = tariff
 
@@ -22,8 +22,16 @@ class BaselineAgent:
         
         self.price, self.solar_production, self.wind_production, self.consumption = data_manager.get_model_data_entry(time_stamp=cur_hour)
 
-        log_controller.log_message(f"\nBaseline Decision - Hour: {cur_hour}, Balance: {balance}, Current Capacity: {cur_capacity}", self.log_type)
-        log_controller.log_message(f"Baseline Data - Price: {self.price}, Solar Production: {self.solar_production}, Wind Production: {self.wind_production}, Consumption: {self.consumption}", self.log_type)
+        log_controller.log_message(
+            f"\nBaseline Decision - Hour: {cur_hour}, Balance: {balance}, Current Capacity: {cur_capacity}",
+            self.log_type
+        )
+
+        log_controller.log_message(
+            f"Baseline Data - Price: {self.price}, Solar Production: {self.solar_production}, "
+            f"Wind Production: {self.wind_production}, Consumption: {self.consumption}",
+            self.log_type
+        )
 
         return self.policy()
 
@@ -69,7 +77,10 @@ class BaselineAgent:
 
         print(f"{self.cur_capacity}")
 
-        log_controller.log_message(f"Baseline Actions: {self.actions}, Balance: {self.balance}, Battery Capacity: {self.cur_capacity}", self.log_type)
+        log_controller.log_message(
+            f"Baseline Actions: {self.actions}, Balance: {self.balance}, Battery Capacity: {self.cur_capacity}",
+            self.log_type
+        )
 
         return self.actions, self.balance, self.cur_capacity
     

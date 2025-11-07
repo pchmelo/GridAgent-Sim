@@ -6,12 +6,14 @@ from datetime import datetime
 class LogController:
     colors = {
         "baseline_input": "\033[91m",
-        "action_validation": "\033[94m",               
+        "action_validation": "\033[94m",
+        "smart_input": "\033[92m",
     }
 
     type_mapping = {
         "baseline_input": "BASELINE INPUT",
         "action_validation": "ACTION VALIDATION",
+        "smart_input": "SMART INPUT",
     }
 
     reset = "\033[0m"  
@@ -22,6 +24,7 @@ class LogController:
         
         self.baseline_input = os.getenv("BASELINE_INPUT", "FALSE") == "TRUE"
         self.action_validation = os.getenv("ACTION_VALIDATION", "FALSE") == "TRUE"
+        self.smart_input = os.getenv("SMART_INPUT", "FALSE") == "TRUE"
 
         current_date = datetime.now().strftime("%Y-%m-%d")
         log_folder = os.path.join(os.path.dirname(__file__), "files")
@@ -40,6 +43,8 @@ class LogController:
             if self.baseline_input:
                 pass
             elif self.action_validation:
+                pass
+            elif self.smart_input:
                 pass
             else:
                 return

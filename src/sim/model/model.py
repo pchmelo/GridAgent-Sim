@@ -9,7 +9,7 @@ from sim.agent.agent_base import HEMSAgent
 load_dotenv()
 interval_str = os.getenv("INTERVAL", "1,0")
 hour_interval, minute_interval = map(int, interval_str.split(","))
-max_capacity = os.getenv("MAX_CAPACITY")
+max_capacity = int(os.getenv("MAX_CAPACITY"))
 
 def get_steps():
     return 24 * 60 // (hour_interval * 60 + minute_interval)
@@ -34,7 +34,7 @@ class HEMSModel(Model):
 
         # Initialize model parameters
         self.steps = get_steps()
-        self.battery_capacity = int(max_capacity)
+        self.battery_capacity = max_capacity
         self.cur_capacity = 0
         self.cur_hour = (0, 0)
 
@@ -58,7 +58,3 @@ class HEMSModel(Model):
         self.cur_hour = update_time(self.cur_hour)
         self.agents.do("step")
         self.datacollector.collect(self)
-
-
-if __name__ == "__main__":
-    print("This is the HEMS Model module.")
