@@ -283,8 +283,22 @@ class DataManager:
             mean_price = (start_value + end_value) / 2
 
         return mean_price
+    
+    def calculate_market_price_mean(self):
+        price_col = self.df_price_data.columns[1]
+        mean_price = self.df_price_data[price_col].mean()
+    
+        return mean_price
+
+    def return_dataframes(self, date: str):
+        if date is not None and (not hasattr(self, 'date') or self.date != date):
+            self.start_data_collection(date)
+        
+        return (self.df_price_data, self.df_solar_production,
+                self.df_wind_production, self.df_consumption)
 
 data_manager = DataManager()
+
 
 
 if __name__ == "__main__":
