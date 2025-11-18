@@ -1,0 +1,152 @@
+body {
+  margin: 0;
+  font-family: "Segoe UI", sans-serif;
+  background: #f8f9fa;
+  color: #333;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.container {
+  flex: 1;
+  padding-bottom: 220px; /* leave room for terminal */
+}
+
+header {
+  text-align: center;
+  margin: 2rem 0 1rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.subtitle {
+  color: #555;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  margin: 1rem;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+label {
+  display: block;
+  margin-top: 0.8rem;
+  font-weight: 500;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 0.6rem;
+  margin-top: 0.3rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.btn-primary, .btn-secondary {
+  margin-top: 1rem;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-primary {
+  background: #0078d4;
+  color: white;
+}
+
+.btn-secondary {
+  background: #e1e1e1;
+  color: #333;
+}
+
+.mt {
+  margin-top: 1.5rem;
+}
+
+/* VS Code style terminal */
+.terminal-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 200px;
+  background: #1e1e1e;
+  border-top: 1px solid #333;
+  color: #d4d4d4;
+  font-family: "Consolas", monospace;
+  display: flex;
+  flex-direction: column;
+  transition: height 0.3s ease;
+  overflow: hidden;
+  z-index: 1000;
+}
+
+/* minimized state */
+.terminal-container.minimized {
+  height: 32px;
+}
+
+/* header bar */
+.terminal-header {
+  background: #2d2d2d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.8rem;
+  color: #ccc;
+  user-select: none;
+  font-size: 0.9rem;
+}
+
+.terminal-toggle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #27c93f;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.terminal-toggle.minimized {
+  background: #ffbd2e;
+}
+
+/* terminal body */
+.terminal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.8rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.terminal-body p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.terminal-body p.info {
+  color: #9cdcfe;
+}
+.terminal-body p.action {
+  color: #ce9178;
+}
+.terminal-body p.run {
+  color: #b5cea8;
+}

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Energy Management System - Agent Simulation</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Energy Management System</h1>
+      <p class="subtitle">Agent Simulation Interface</p>
+    </header>
+
+    <main>
+      <section class="card grid-2">
+        <div>
+          <h2>Bateria & Tarifas</h2>
+          <label>Capacidade maxima da bateria (kWh)</label>
+          <input type="number" placeholder="Ex: 500" />
+
+          <label>Relacao entre tarifas de importacao/exportacao</label>
+          <input type="range" min="0" max="100" value="50" class="slider" />
+          <span class="slider-label">50%</span>
+
+          <label>Resolucao temporal</label>
+          <select>
+            <option>15 min</option>
+            <option>30 min</option>
+            <option>1 hora</option>
+            <option>1 dia</option>
+          </select>
+
+          <button class="btn-primary">Alterar modo</button>
+
+          <h3 class="mt">Inserir série temporal</h3>
+          <input type="file" class="file-input" />
+        </div>
+      </section>
+
+      <section class="card grid-2 mt">
+        <div>
+          <h2>Balanco final da operacao</h2>
+          <textarea readonly placeholder="Resultado final será exibido aqui..."></textarea>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- VS Code style terminal -->
+  <div class="terminal-container" id="terminalContainer">
+    <div class="terminal-header">
+      <div class="terminal-toggle" id="toggleTerminal"></div>
+      <span>TERMINAL</span>
+      <div></div>
+    </div>
+    <div class="terminal-body" id="terminalBody">
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
