@@ -1,15 +1,17 @@
 from datetime import datetime
-
 import os
 from dotenv import load_dotenv
+from sim.data.json_result_manager import json_result_manager
+from sim.model.model import HEMSModel
+from sim.agent.smart.train import train_sac_agent
 
 load_dotenv()
+
 mode = os.getenv("MODE")
 agent = os.getenv("AGENT_TYPE")
 
 if __name__ == "__main__":
     if mode == "run_model":
-        from sim.model.model import HEMSModel
 
         model = HEMSModel()
 
@@ -17,12 +19,10 @@ if __name__ == "__main__":
             model.step()
 
         results = model.datacollector.get_model_vars_dataframe()
-
         filename = f"{agent}_{datetime.now():%Y%m%d_%H%M%S}.csv"
         results.to_csv(os.path.join("src", "log", "results", agent, filename))
 
     elif mode == "train":
-        from sim.agent.smart.train import train_sac_agent
 
         train_sac_agent(
             total_timesteps=200000,
