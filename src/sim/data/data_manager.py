@@ -296,6 +296,27 @@ class DataManager:
         
         return (self.df_price_data, self.df_solar_production,
                 self.df_wind_production, self.df_consumption)
+    
+    def calculate_total_consumption_price(self):
+        if hasattr(self, 'df_consumption') and hasattr(self, 'df_price_data'):
+            res = 0.0
+            
+            consumption_col = self.df_consumption.columns[1]
+            price_col = self.df_price_data.columns[1]
+            
+            merged_df = pd.merge(
+                self.df_consumption[['total_minutes', consumption_col]], 
+                self.df_price_data[['total_minutes', price_col]], 
+                on='total_minutes', 
+                how='inner'
+            )
+            
+            merged_df['cost'] = merged_df[consumption_col] * merged_df[price_col]
+            res = merged_df['cost'].sum()
+            
+            return True, res
+        return False, None
+
 
 data_manager = DataManager()
 

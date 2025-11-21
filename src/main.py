@@ -28,6 +28,8 @@ if __name__ == "__main__":
         results = model.datacollector.get_model_vars_dataframe()
         json_result_manager.save_to_json_file(results, agent_type="basic")
 
+        json_result_manager.calculate_final_results()
+
     elif mode == "train":
 
         train_sac_agent(
