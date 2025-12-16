@@ -58,10 +58,10 @@ class HEMSEnvironment(gym.Env):
         
         # Observation space: 
         # [battery_level_normalized, price_normalized, solar_production_normalized, consumption_normalized,
-        #  hour_sin, hour_cos, minute_sin, minute_cos]
+        #  hour_sin, hour_cos, minute_sin, minute_cos, price_high_signal, price_low_signal]
         self.observation_space = spaces.Box(
-            low=np.array([0, 0, 0, 0, -1, -1, -1, -1]),
-            high=np.array([1, 1, 1, 1, 1, 1, 1, 1]),
+            low=np.array([0, 0, 0, 0, -1, -1, -1, -1, 0, 0]),
+            high=np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
             dtype=np.float32
         )
         
@@ -96,6 +96,10 @@ class HEMSEnvironment(gym.Env):
         minute_sin = np.sin(2 * np.pi * minute / 60)
         minute_cos = np.cos(2 * np.pi * minute / 60)
         
+        # Price indicators
+        price_high_signal = 1.0 if price > 0.08 else 0.0
+        price_low_signal = 1.0 if price < 0.04 else 0.0
+        
         return np.array([
             battery_normalized,
             price_normalized,
@@ -104,7 +108,9 @@ class HEMSEnvironment(gym.Env):
             hour_sin,
             hour_cos,
             minute_sin,
-            minute_cos
+            minute_cos,
+            price_high_signal,
+            price_low_signal,
         ], dtype=np.float32)
     
     def _update_time(self):
@@ -179,9 +185,9 @@ class HEMSEnvironment(gym.Env):
         cost_for_battery = grid_to_battery * price
         total_cost = cost_for_consumption + cost_for_battery
         
-        # Penalty for unmet consumption (critical)
+        # Penalty for unmet consumption (CRITICAL)
         unmet_consumption = consumption - (production_to_consumption + battery_to_consumption + grid_to_consumption)
-        if unmet_consumption > 0.01:  # tolerance
+        if unmet_consumption > 0.01:
             penalty += 1000 * unmet_consumption
         
         # Penalty for wasted production
@@ -189,15 +195,9 @@ class HEMSEnvironment(gym.Env):
         if wasted_production > 0.01:
             penalty += 100 * wasted_production
         
-        # Small penalty for battery degradation (encourage efficient use)
-        battery_usage_penalty = 0.01 * (production_to_battery + grid_to_battery + battery_to_consumption + battery_to_grid)
-        
-        # Penalty for buying expensive energy to charge battery (discourage inefficiency)
+        # Penalty for buying expensive energy to charge battery
         if price > 0.05 and grid_to_battery > 0:
             penalty += 50 * grid_to_battery * price
-        
-        # Reward = profit - penalties
-        reward = (total_revenue - total_cost) * 10 - penalty - battery_usage_penalty
         
         # Update battery capacity
         battery_net_change = production_to_battery + grid_to_battery - battery_to_consumption - battery_to_grid
@@ -215,6 +215,31 @@ class HEMSEnvironment(gym.Env):
         terminated = self.current_step >= self.max_steps
         truncated = False
         
+        # END-OF-DAY PENALTY: Penalize unused battery capacity
+        # Battery has value only if used - storing energy at end of day is wasted opportunity
+        end_of_day_penalty = 0
+        if terminated:
+            # Penalize remaining battery capacity (lost profit opportunity)
+            # Assume average price for selling
+            avg_price = 0.07
+            opportunity_loss = self.cur_capacity * avg_price * self.tariff
+            end_of_day_penalty = opportunity_loss * 50
+            penalty += end_of_day_penalty
+        
+        # Reward selling battery when prices are high
+        price_threshold = 0.08
+        if price > price_threshold and battery_to_grid > 0:
+            reward += battery_to_grid * (price - price_threshold) * 200
+        
+        # Reward buying/storing when prices are low
+        low_price_threshold = 0.04
+        if price < low_price_threshold and grid_to_battery > 0:
+            reward += grid_to_battery * (low_price_threshold - price) * 100
+        
+        # Final reward calculation
+        profit = total_revenue - total_cost
+        reward = profit * 10_000 - penalty + reward
+        
         info = {
             "balance": self.balance,
             "battery_level": self.cur_capacity,
@@ -223,7 +248,8 @@ class HEMSEnvironment(gym.Env):
             "total_cost": total_cost,
             "production_to_grid": production_to_grid,
             "battery_to_grid": battery_to_grid,
-            "grid_to_battery": grid_to_battery
+            "grid_to_battery": grid_to_battery,
+            "end_of_day_penalty": end_of_day_penalty if terminated else 0,
         }
         
         return self._get_observation(), reward, terminated, truncated, info

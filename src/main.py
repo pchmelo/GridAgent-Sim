@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
 from sim.data.json_result_manager import json_result_manager
-from sim.model.model import HEMSModel
 from sim.agent.smart.train import train_sac_agent
 
 load_dotenv()
@@ -10,6 +9,8 @@ mode = os.getenv("MODE")
 
 if __name__ == "__main__":
     if mode == "run_model":
+        from sim.model.model import HEMSModel
+
         """Run Smart Agent"""
         model = HEMSModel(agent_type="smart")
 
@@ -33,9 +34,10 @@ if __name__ == "__main__":
     elif mode == "train":
 
         train_sac_agent(
-            total_timesteps=200000,
+            total_timesteps=1_000_000,
             use_gpu=True,
-            n_envs=4
+            n_envs=4,
+            resume_from="src/sim/agent/smart/models/best_model.zip"
         )
 
     else:

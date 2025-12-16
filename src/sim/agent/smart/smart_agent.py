@@ -19,9 +19,13 @@ class SmartAgent:
         self.tariff = tariff
 
         # Normalization constants (MUST MATCH TRAINING ENVIRONMENT!!!)
-        self.max_price = 1.0
-        self.max_production = 10.0
-        self.max_consumption = 10.0
+        self.max_price = 0.2
+        self.max_production = 5.0
+        self.max_consumption = 3.0
+        
+        # Price thresholds (MUST MATCH TRAINING ENVIRONMENT!!!)
+        self.price_high_threshold = 0.08
+        self.price_low_threshold = 0.04
 
         # Load trained model
         if model_path is None:
@@ -75,6 +79,7 @@ class SmartAgent:
         return actions, self.balance, self.cur_capacity
     
     def get_observation(self, time_stamp):
+        """Convert current state to observation vector (MUST MATCH TRAINING ENVIRONMENT!!!)"""
         hour, minute = time_stamp
         
         # Normalize values
@@ -89,6 +94,10 @@ class SmartAgent:
         minute_sin = np.sin(2 * np.pi * minute / 60)
         minute_cos = np.cos(2 * np.pi * minute / 60)
         
+        # Price indicators
+        price_high_signal = 1.0 if self.price > self.price_high_threshold else 0.0
+        price_low_signal = 1.0 if self.price < self.price_low_threshold else 0.0
+        
         return np.array([
             battery_normalized,
             price_normalized,
@@ -97,11 +106,17 @@ class SmartAgent:
             hour_sin,
             hour_cos,
             minute_sin,
-            minute_cos
+            minute_cos,
+            price_high_signal,
+            price_low_signal,
         ], dtype=np.float32)
     
     def convert_action_to_flows(self, action):
+        """Convert normalized action to actual energy flows (all 7 actions)"""
         actions = []
+        
+        # Tolerance for floating point operations
+        TOLERANCE = 1e-6
         
         # Extract action percentages
         prod_to_cons_pct = float(action[0])
@@ -112,7 +127,7 @@ class SmartAgent:
         grid_to_battery_pct = float(action[5])
         grid_to_cons_pct = float(action[6])
         
-        # Phase 1:Production allocation
+        # Phase 1: Production allocation
         # Production to consumption
         production_to_consumption = min(
             prod_to_cons_pct * self.consumption, 
@@ -159,8 +174,24 @@ class SmartAgent:
         )
         grid_to_battery = grid_to_battery_pct * max(0, max_battery_charge_remaining)
         
-        # Grid to consumption (buy energy for immediate use)
-        grid_to_consumption = remaining_consumption  # Ensure all consumption is met
+        # Grid to consumption (buy energy for immediate use) - ENSURE ALL CONSUMPTION IS MET
+        grid_to_consumption = max(0, remaining_consumption)
+        
+        # Clamp to zero if very small (floating point errors)
+        if abs(grid_to_consumption) < TOLERANCE:
+            grid_to_consumption = 0
+        if abs(production_to_consumption) < TOLERANCE:
+            production_to_consumption = 0
+        if abs(production_to_battery) < TOLERANCE:
+            production_to_battery = 0
+        if abs(production_to_grid) < TOLERANCE:
+            production_to_grid = 0
+        if abs(battery_to_consumption) < TOLERANCE:
+            battery_to_consumption = 0
+        if abs(battery_to_grid) < TOLERANCE:
+            battery_to_grid = 0
+        if abs(grid_to_battery) < TOLERANCE:
+            grid_to_battery = 0
         
         # Update balance and capacity
         revenue_from_production = production_to_grid * self.price * self.tariff
@@ -178,19 +209,19 @@ class SmartAgent:
         self.cur_capacity = max(0, min(self.cur_capacity, self.battery_max_capacity))
         
         # Build actions list (all 7 actions)
-        if production_to_consumption > 0.001:
+        if production_to_consumption > TOLERANCE:
             actions.append({"production_to_consumption": production_to_consumption})
-        if production_to_battery > 0.001:
+        if production_to_battery > TOLERANCE:
             actions.append({"production_to_battery": production_to_battery})
-        if production_to_grid > 0.001:
+        if production_to_grid > TOLERANCE:
             actions.append({"production_to_grid": production_to_grid})
-        if battery_to_consumption > 0.001:
+        if battery_to_consumption > TOLERANCE:
             actions.append({"battery_to_consumption": battery_to_consumption})
-        if battery_to_grid > 0.001:
+        if battery_to_grid > TOLERANCE:
             actions.append({"battery_to_grid": battery_to_grid})
-        if grid_to_battery > 0.001:
+        if grid_to_battery > TOLERANCE:
             actions.append({"grid_to_battery": grid_to_battery})
-        if grid_to_consumption > 0.001:
+        if grid_to_consumption > TOLERANCE:
             actions.append({"grid_to_consumption": grid_to_consumption})
         
         return actions

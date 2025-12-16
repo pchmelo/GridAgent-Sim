@@ -43,3 +43,4 @@ sim/data/results/csv/basic/*.csv
 sim/data/results/csv/smart/*.csv
 sim/data/results/json/basic/*.json
 sim/data/results/json/smart/*.json
+sim/data/results/final_results/*.json
