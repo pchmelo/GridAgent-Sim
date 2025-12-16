@@ -89,7 +89,7 @@ class HEMSModel(Model):
 
         return (hour, minute)
 
-    def format_actions(actions):
+    def format_actions(self, actions):
         """Format actions list into a string: 'key: value, key: value, ...'"""
         if not actions:
             return "No actions"
