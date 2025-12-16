@@ -39,6 +39,13 @@ if __name__ == "__main__":
             n_envs=4,
             resume_from="src/sim/agent/smart/models/best_model.zip"
         )
+    elif mode == "gui_mode":
+        import subprocess
+        import sys
+        
+        # Launch Streamlit GUI
+        gui_path = os.path.join(os.path.dirname(__file__), "gui", "gui.py")
+        subprocess.run([sys.executable, "-m", "streamlit", "run", gui_path])
 
     else:
-        print("Invalid MODE in .env file. Please set MODE to 'run_model' or 'train'.")
+        print("Invalid MODE in .env file. Please set MODE to 'run_model', 'train', or 'gui_mode'.")

@@ -7,7 +7,7 @@ class SimulationManager:
         self.model_smart = HEMSModel(agent_type="smart")
         self.model_basic = HEMSModel(agent_type="basic")
 
-    def start_smulation(self, config, df_solar_production=None, df_wind_production=None, df_consumption=None, df_price=None) -> Dict:
+    def start_simulation(self, config, df_solar_production=None, df_wind_production=None, df_consumption=None, df_price=None) -> Dict:
         self.pass_configs_to_model(config, df_solar_production, df_wind_production, df_consumption, df_price)
         
         for i in range(self.model_smart.steps):
@@ -39,8 +39,8 @@ class SimulationConfigs:
         self.config = config
 
         self.selected_date = config.get("selected_date", None)
-        self.interval = config.get("interval", None)
-        self.battery_max_capacity = config.get("max_capacity", None)
+        self.interval = config.get("interval", 60)
+        self.battery_max_capacity = config.get("max_capacity", 10)
 
         self.tariff = config.get("tariff", None)
         self.complex_mode = config.get("complex_mode", False)
@@ -49,3 +49,12 @@ class SimulationConfigs:
         self.df_wind_production = df_wind_production
         self.df_consumption = df_consumption
         self.df_price = df_price
+
+        if self.tariff is None:
+            self.tariff = 0.75
+        
+        if self.interval is None or self.interval == 0:
+            self.interval = 60
+
+        if self.battery_max_capacity is None or self.battery_max_capacity <= 0:
+            self.battery_max_capacity = 10

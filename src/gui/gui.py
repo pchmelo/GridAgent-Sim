@@ -1,16 +1,22 @@
-import streamlit as st
-import streamlit.components.v1 as components
-import time
-from datetime import datetime,timedelta
-import pandas as pd
-import numpy as np
-from sim.data.data_manager import data_manager
-import json
-import os
-#from sim.simulation_manager import SimulationManager
 import sys
 import os
 from pathlib import Path
+
+# Add src directory to Python path
+src_dir = Path(__file__).parent.parent
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+
+import streamlit as st
+import streamlit.components.v1 as components
+import time
+from datetime import datetime, timedelta
+import pandas as pd
+import numpy as np
+import json
+
+from sim.data.data_manager import data_manager
+from sim.simulation_manager import SimulationManager
 
 st.set_page_config(layout="wide")
 
@@ -539,13 +545,21 @@ if run_simulation:
 
     json_data = json.dumps(config, indent=4)
 
-    #sim_manager = SimulationManager()
+    sim_manager = SimulationManager()
 
-    """SimulationManager.start_smulation(config=config,
+    print(10*"-")
+    print(config)
+    print(10*"-")
+
+    json_res = sim_manager.start_simulation(config=config,
                                       df_solar_production=st.session_state.solar_data,
                                       df_wind_production=st.session_state.wind_data,
                                       df_consumption=st.session_state.consumption_data,
-                                      df_price=st.session_state.market_data)"""
+                                      df_price=st.session_state.market_data)
+    
+    print(10*"-")
+    print(json_res)
+    print(10*"-")
     
     st.session_state.simulation_run = True
 
@@ -580,8 +594,15 @@ if run_simulation:
 
         time.sleep(0.5)
 
-with open(r"C:\Users\gabib\Desktop\Mestrado_IA\MS\MS_Household_Energy_Production\src\log\files\final_results_20251121_123019.json","r") as file:
-    json_data = json.loads(file.read())
+# Get the latest final results file
+results_dir = Path(__file__).parent.parent / "sim" / "data" / "results" / "final_results"
+result_files = sorted(results_dir.glob("final_results_*.json"), reverse=True)
+
+if result_files:
+    with open(result_files[0], "r") as file:
+        json_data = json.loads(file.read())
+else:
+    json_data = {"smart": {}, "basic": {}}
 
 smart_data = json_data["smart"] if "smart" in json_data.keys() else None
 basic_data = json_data["basic"] if "basic" in json_data.keys() else None
@@ -898,4 +919,8 @@ with col3:
         overview_button = st.button("Simulation Overview")
 
         if overview_button:
-            display_simulation_overview(r"C:\Users\gabib\Desktop\Mestrado_IA\MS\MS_Household_Energy_Production\src\log\files\final_results_20251121_123019.json")
+            # Get the latest final results file
+            results_dir = Path(__file__).parent.parent / "sim" / "data" / "results" / "final_results"
+            result_files = sorted(results_dir.glob("final_results_*.json"), reverse=True)
+            if result_files:
+                display_simulation_overview(str(result_files[0]))

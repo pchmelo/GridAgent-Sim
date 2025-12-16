@@ -52,16 +52,22 @@ class HEMSModel(Model):
     def setup_configs(self, simulation_configs):
         self.simulation_configs = simulation_configs
 
-       
         self.battery_capacity = simulation_configs.battery_max_capacity
         self.interval_str = simulation_configs.interval
         
-        if simulation_configs.interval == 60:
+        if simulation_configs.interval is None or simulation_configs.interval == 0:
+            # Default to 1 hour intervals if None or 0 is provided
+            self.hour_interval = 1
+            self.minute_interval = 0
+        elif simulation_configs.interval == 60:
             self.hour_interval = 1
             self.minute_interval = 0
         else:
             self.hour_interval = 0
             self.minute_interval = simulation_configs.interval
+        
+        # Recalculate steps with new intervals
+        self.steps = self.get_steps()
             
         agent = HEMSAgent(self, self.agent_type, simulation_configs)
         self.agents.add(agent)
