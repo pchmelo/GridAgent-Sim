@@ -16,7 +16,7 @@ import numpy as np
 import json
 
 from sim.data.data_manager import data_manager
-#from sim.simulation_manager import SimulationManager
+from sim.simulation_manager import SimulationManager
 
 st.set_page_config(layout="wide")
 
@@ -352,20 +352,20 @@ def ems_monitor_smart(smart_data):
 
         json_data = json.dumps(config, indent=4)
 
-        #sim_manager = SimulationManager()
+        sim_manager = SimulationManager()
 
         print(10*"-")
         print(config)
         print(10*"-")
 
-        """json_res = sim_manager.start_simulation(config=config,
+        json_res = sim_manager.start_simulation(config=config,
                                         df_solar_production=st.session_state.solar_data,
                                         df_wind_production=st.session_state.wind_data,
                                         df_consumption=st.session_state.consumption_data,
-                                        df_price=st.session_state.market_data)"""
+                                        df_price=st.session_state.market_data)
         
         print(10*"-")
-        #print(json_res)
+        print(json_res)
         print(10*"-")
         
         st.session_state.simulation_run = True
@@ -458,20 +458,20 @@ def ems_monitor_basic(basic_data):
 
         json_data = json.dumps(config, indent=4)
 
-        #sim_manager = SimulationManager()
+        sim_manager = SimulationManager()
 
         print(10*"-")
         print(config)
         print(10*"-")
 
-        """json_res = sim_manager.start_simulation(config=config,
+        json_res = sim_manager.start_simulation(config=config,
                                         df_solar_production=st.session_state.solar_data,
                                         df_wind_production=st.session_state.wind_data,
                                         df_consumption=st.session_state.consumption_data,
-                                        df_price=st.session_state.market_data)"""
+                                        df_price=st.session_state.market_data)
         
         print(10*"-")
-        #print(json_res)
+        print(json_res)
         print(10*"-")
         
         st.session_state.simulation_run = True
@@ -621,6 +621,7 @@ with st.sidebar:
 
     if insert_csv:
         st.session_state.show_calendar = False
+        st.session_state.selected_date = None
 
         uploaded_file_1 = st.file_uploader("Insert consumption data", type=["csv"], key="consumption_uploader")
         if uploaded_file_1:
@@ -651,6 +652,10 @@ with st.sidebar:
             st.rerun()
 
     if use_api:
+        st.session_state.consumption_data = None
+        st.session_state.market_data = None
+        st.session_state.solar_data = None
+        st.session_state.wind_data = None
         st.session_state.show_calendar = True
 
     calendar_placeholder = st.empty()
