@@ -8,9 +8,9 @@ if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
 import streamlit as st
-import streamlit.components.v1 as components
 import time
 from datetime import datetime, timedelta
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import json
@@ -74,6 +74,9 @@ def confirm_collection_modal(date_str):
 def display_simulation_overview(json_path : str = None):
     tabs = st.tabs(["Smart","Basic"])
 
+    with open(json_path, "r") as file:
+        json_data = json.loads(file.read())
+
     rows = []
     for agent_type in ['smart', 'basic']:
         agent_data = json_data.get(agent_type, {})
@@ -98,39 +101,411 @@ def display_simulation_overview(json_path : str = None):
 
     # Create the main DataFrame
     df_simulation = pd.DataFrame(rows)
+    df_simulation = df_simulation.rename(columns={"New_Capacity" : "Battery"})
     df_simulation["Time"] = pd.to_datetime(df_simulation["Time"])
+
+    all_columns = [
+    "Solar_Production", 
+    "Consumption", 
+    "Battery",
+    "Price",
+    "Balance"]
 
     with tabs[0]:
         df_smart = df_simulation[df_simulation["Agent_Type"] == "smart"]
         st.caption("Smart Agent Simulation Overview")
 
-        st.line_chart(df_smart,x="Time",y="Solar_Production")
+        scale = st.selectbox( "Choose a scale for the polts!",
+                ("Default", "Logarithmic"))
+        selected_cols = st.multiselect(
+                "Select metrics to display", 
+                options=all_columns, 
+                default=["Solar_Production"] 
+            )
+        
+        if scale == "Default":
+            # 3. Display the chart
+            if selected_cols:
+                st.line_chart(df_smart, x="Time", y=selected_cols)
+            else:
+                st.info("Select one or more metrics from the dropdown above to start visualizing.")
+        elif scale == "Logarithmic":
+            df_smart_log = df_smart.copy()
+            for col in all_columns:
+                df_smart_log[col] = df_smart_log[col].apply(lambda x: np.log(x) if x > 0 else 0)
 
-        st.line_chart(df_smart,x="Time",y="Wind_Production")
-
-        st.line_chart(df_smart,x="Time",y="Consumption")
-
-        st.line_chart(df_smart,x="Time",y="New_Capacity")
-
-        st.line_chart(df_smart,x="Time",y="Current_Capacity")
-
-        st.line_chart(df_smart,x="Time",y="Price")
+            # 3. Display the chart
+            if selected_cols:
+                st.line_chart(df_smart_log, x="Time", y=selected_cols)
+            else:
+                st.info("Select one or more metrics from the dropdown above to start visualizing.")
     
     with tabs[1]:
         df_basic = df_simulation[df_simulation["Agent_Type"] == "basic"]
         st.caption("Basic Agent Simulation Overview")
+        selected_cols = st.multiselect(
+            "Select metrics to display", 
+            options=all_columns, 
+            default=["Solar_Production"],key="SC1"
+        )
 
-        st.line_chart(df_basic,x="Time",y="Solar_Production")
+        # 3. Display the chart
+        if selected_cols:
+            st.line_chart(df_basic, x="Time", y=selected_cols)
+        else:
+            st.info("Select one or more metrics from the dropdown above to start visualizing.")
 
-        st.line_chart(df_basic,x="Time",y="Wind_Production")
+def display_input_metrics(input_data,timestamp):
+   # 1. Big Timestamp Header
+    st.markdown(f"## 🕒 Time: `{timestamp}`")
+    
+    meta = {
+        "Solar_Production": {"icon": "☀️", "unit": "kW"},
+        "Consumption": {"icon": "🏠", "unit": "kW"},
+        "Current_Capacity": {"icon": "🔋", "unit": "kWh"},
+        "Price": {"icon": "💰", "unit": "/kWh"}
+    }
+    
+    # 2. Loop through and display large text
+    for key, value in input_data.items():
+        if key != "Wind_Production":
+            m = meta.get(key, {"icon": "📊", "unit": ""})
+            label = key.replace('_', ' ')
+            
+            # We use a div with inline CSS for custom sizing
+            # Adjust '24px' to '30px' if you want it even larger
+            st.markdown(
+                f"""
+                <div style="font-size: 24px; font-family: sans-serif; margin-bottom: 10px;">
+                    {m['icon']} <b>{label}</b>: 
+                    <span style="color: #60A5FA; font-family: monospace;">{value:.4f}</span> {m['unit']}
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
 
-        st.line_chart(df_basic,x="Time",y="Consumption")
+def display_output_metrics(output_data):
+    # 2. Mapping keys to Emojis and Units
+    meta = {
+        "Balance": {"icon": "⚖️", "unit": "€"},
+        "New_Capacity": {"icon": "🔋", "unit": "kWh"}
+    }
+    
+    # 3. Loop through and display large text
+    for key, value in output_data.items():
+        m = meta.get(key, {"icon": "📝", "unit": ""})
+        label = key.replace('_', ' ')
+        
+        # Color logic: Red if balance is negative, Green if positive
+        val_color = "#FF4B4B" if key == "Balance" and value < 0 else "#60A5FA"
+        if key == "Balance" and value >= 0: val_color = "#00FF00"
 
-        st.line_chart(df_basic,x="Time",y="New_Capacity")
+        st.markdown(
+            f"""
+            <div style="font-size: 24px; font-family: sans-serif; margin-bottom: 10px;">
+                {m['icon']} <b>{label}</b>: 
+                <span style="color: {val_color}; font-family: monospace;">{value:.4f}</span> {m['unit']}
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
 
-        st.line_chart(df_basic,x="Time",y="Current_Capacity")
+def draw_ems_map(actions_list):
+    def get_val(key):
+        for action in actions_list:
+            if key in action:
+                return action[key]
+        return 0.0
 
-        st.line_chart(df_basic,x="Time",y="Price")
+     # 1. Extract values
+    b2c = get_val("battery_to_consumption")
+    b2g = get_val("battery_to_grid")
+    g2b = get_val("grid_to_battery")
+    g2c = get_val("grid_to_consumption")
+    p2c = get_val("production_to_consumption") # New
+    p2b = get_val("production_to_battery")     # New
+
+    # 2. Determine visibility
+    b2c_style = "display: block;" if b2c > 0 else "display: none;"
+    b2g_style = "display: block;" if b2g > 0 else "display: none;"
+    g2b_style = "display: block;" if g2b > 0 else "display: none;"
+    g2c_style = "display: block;" if g2c > 0 else "display: none;"
+    p2c_style = "display: block;" if p2c > 0 else "display: none;"
+    p2b_style = "display: block;" if p2b > 0 else "display: none;"
+
+    svg_code = f"""
+    <div style="display: flex; justify-content: center; background-color: #0e1117; border-radius: 15px; padding: 10px;">
+        <svg viewBox="0 0 600 350" width="600" height="350" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                    <path d="M0,0 L10,5 L0,10 Z" fill="#555" />
+                </marker>
+                <style>
+                    .flow-line {{ stroke-dasharray: 8; animation: dash 1s linear infinite; }}
+                    @keyframes dash {{ from {{ stroke-dashoffset: 16; }} to {{ stroke-dashoffset: 0; }} }}
+                    .label {{ fill: #888; font-size: 12px; font-family: sans-serif; }}
+                    .val {{ font-size: 14px; font-weight: bold; font-family: sans-serif; }}
+                    .node-text {{ font-size: 40px; }}
+                </style>
+            </defs>
+
+            <text x="100" y="50" class="node-text" text-anchor="middle">☀️</text>
+            <text x="100" y="80" class="label" text-anchor="middle">Solar</text>
+
+            <text x="500" y="50" class="node-text" text-anchor="middle">🏠</text>
+            <text x="500" y="80" class="label" text-anchor="middle">Consumption</text>
+            
+            <text x="100" y="270" class="node-text" text-anchor="middle">🔋</text>
+            <text x="100" y="300" class="label" text-anchor="middle">Battery</text>
+            
+            <text x="500" y="270" class="node-text" text-anchor="middle">⚡</text>
+            <text x="500" y="300" class="label" text-anchor="middle">Grid</text>
+
+            <g style="{p2c_style}">
+                <path d="M140,40 L460,40" stroke="#fbbf24" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
+                <text x="300" y="30" fill="#fbbf24" class="val" text-anchor="middle">{p2c:.2f} kW</text>
+            </g>
+
+            <g style="{p2b_style}">
+                <path d="M100,90 L100,220" stroke="#fbbf24" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
+                <text x="90" y="160" fill="#fbbf24" class="val" text-anchor="middle" transform="rotate(-90, 90, 160)">{p2b:.2f} kW</text>
+            </g>
+
+            <g style="{b2c_style}">
+                <path d="M140,240 L460,70" stroke="#00FF00" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
+                <text x="250" y="150" fill="#00FF00" class="val" transform="rotate(-28, 250, 150)">{b2c:.2f} kW</text>
+            </g>
+
+            <g style="{g2c_style}">
+                <path d="M500,220 L500,90" stroke="#FACC15" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
+                <text x="515" y="160" fill="#FACC15" class="val" text-anchor="middle" transform="rotate(90, 515, 160)">{g2c:.2f} kW</text>
+            </g>
+
+            <g style="{b2g_style}">
+                <path d="M140,265 L460,265" stroke="#FF4B4B" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
+                <text x="300" y="255" fill="#FF4B4B" class="val" text-anchor="middle">{b2g:.2f} kW</text>
+            </g>
+            
+            <g style="{g2b_style}">
+                <path d="M460,285 L140,285" stroke="#60A5FA" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
+                <text x="300" y="310" fill="#60A5FA" class="val" text-anchor="middle">{g2b:.2f} kW</text>
+            </g>
+        </svg>
+    </div>
+    """
+    return svg_code
+
+@st.fragment
+def ems_monitor_smart(smart_data):
+    smart_keys = [i for i in smart_data.keys()]
+    col1, col2, col3 = st.columns([1, 2, 1])
+    ems_map_window = col2.empty()
+
+    with col2:
+        c1, c2, c3 = st.columns([1, 1, 1])
+        with c3:
+            forward_click = st.button("Fordward Step", use_container_width=True)
+        with c1:
+            backwards_click = st.button("Backward Step", use_container_width=True)
+        with c2:
+            run_simulation = st.button("Run Simulation",type="primary", use_container_width=True)
+    
+    if forward_click:
+        st.session_state.index += 1
+        st.session_state.index %= len(smart_keys)
+    
+    if backwards_click:
+        st.session_state.index -= 1
+        st.session_state.index %= len(smart_keys)
+
+    input_data = smart_data[smart_keys[st.session_state.index]]["input_data"]
+    actions = smart_data[smart_keys[st.session_state.index]]["Actions"]
+    output_data = smart_data[smart_keys[st.session_state.index]]["output_data"]
+
+    with col1:
+        st.title("Input data")
+        display_input_metrics(input_data,smart_keys[st.session_state.index])
+
+    with ems_map_window:
+        st.title("Actions")
+        components.html(draw_ems_map(actions) , height=330)
+    
+    with col3:
+        st.title("Output Data")
+        display_output_metrics(output_data)
+        if st.session_state.simulation_run:
+            overview_button = st.button("Simulation Overview")
+
+            if overview_button:
+                if result_files:
+                    display_simulation_overview(str(result_files[0]))
+    
+    if run_simulation:
+        config = {
+        "selected_date": st.session_state.get("selected_date"),
+        "interval": st.session_state.get("interval"),
+        "max_capacity": st.session_state.get("max_capacity"),
+        "tariff": st.session_state.get("tariff"),
+        "complex_mode": st.session_state.get("complex_mode"),
+        "used_api":True if st.session_state.get("selected_date") else False
+        }
+
+        json_data = json.dumps(config, indent=4)
+
+        sim_manager = SimulationManager()
+
+        print(10*"-")
+        print(config)
+        print(10*"-")
+
+        json_res = sim_manager.start_simulation(config=config,
+                                        df_solar_production=st.session_state.solar_data,
+                                        df_wind_production=st.session_state.wind_data,
+                                        df_consumption=st.session_state.consumption_data,
+                                        df_price=st.session_state.market_data)
+        
+        print(10*"-")
+        print(json_res)
+        print(10*"-")
+        
+        st.session_state.simulation_run = True
+
+        st.rerun()
+
+        for i in range(5):
+            st.session_state.logs.append(create_log(f"Step {i+1} complete — {datetime.now().strftime("%H:%M:%S")}"))
+            logs_html = "".join(st.session_state.logs)
+
+            # rebuild entire HTML each time (nonce changes to force rerender)
+            terminal_placeholder.html(
+                f"""
+        {terminal_style}
+        <!-- Hidden toggle input -->
+        <input type="checkbox" id="toggleTerminal">
+
+        <!-- Terminal container -->
+            <!-- nonce: {time.time()} -->
+        <div class="terminal-container" id="terminalContainer">
+            <div class="terminal-header">
+            <!-- Label controls the checkbox -->
+            <label for="toggleTerminal" class="terminal-toggle"></label>
+            <span>Logs</span>
+            <div></div>
+            </div>
+            <div class="terminal-body" id="terminalBody">
+            {logs_html}
+            </div>
+        </div>
+        """
+            )
+
+            time.sleep(0.5)
+
+@st.fragment
+def ems_monitor_basic(basic_data):
+    basic_keys = [i for i in basic_data.keys()]
+    col1, col2, col3 = st.columns([1, 2, 1])
+    ems_map_window = col2.empty()
+
+    with col2:
+        c1, c2, c3 = st.columns([1, 1, 1])
+        with c3:
+            forward_click_1 = st.button("Fordward Step",key="FS1",use_container_width=True)
+        with c1:
+            backwards_click_1 = st.button("Backward Step",key="BS1", use_container_width=True)
+        with c2:
+            run_simulation_1 = st.button("Run Simulation",type="primary",key="RS1", use_container_width=True)
+    
+    if forward_click_1:
+        st.session_state.index_basic += 1
+        st.session_state.index_basic %= len(basic_keys)
+    
+    if backwards_click_1:
+        st.session_state.index_basic -= 1
+        st.session_state.index_basic %= len(basic_keys)
+
+    input_data = basic_data[basic_keys[st.session_state.index_basic]]["input_data"]
+    actions = basic_data[basic_keys[st.session_state.index_basic]]["Actions"]
+    output_data = basic_data[basic_keys[st.session_state.index_basic]]["output_data"]
+
+    with col1:
+        st.title("Input data")
+        display_input_metrics(input_data,basic_keys[st.session_state.index_basic])
+
+    with ems_map_window:
+        st.title("Actions")
+        components.html(draw_ems_map(actions) , height=330)
+    
+    with col3:
+        st.title("Output Data")
+        display_output_metrics(output_data)
+        if st.session_state.simulation_run:
+            overview_button = st.button("Simulation Overview",key="OV1")
+
+            if overview_button:
+                if result_files:
+                    display_simulation_overview(str(result_files[0]))
+    
+    if run_simulation_1:
+        config = {
+        "selected_date": st.session_state.get("selected_date"),
+        "interval": st.session_state.get("interval"),
+        "max_capacity": st.session_state.get("max_capacity"),
+        "tariff": st.session_state.get("tariff"),
+        "complex_mode": st.session_state.get("complex_mode"),
+        "used_api":True if st.session_state.get("selected_date") else False
+        }
+
+        json_data = json.dumps(config, indent=4)
+
+        sim_manager = SimulationManager()
+
+        print(10*"-")
+        print(config)
+        print(10*"-")
+
+        json_res = sim_manager.start_simulation(config=config,
+                                        df_solar_production=st.session_state.solar_data,
+                                        df_wind_production=st.session_state.wind_data,
+                                        df_consumption=st.session_state.consumption_data,
+                                        df_price=st.session_state.market_data)
+        
+        print(10*"-")
+        print(json_res)
+        print(10*"-")
+        
+        st.session_state.simulation_run = True
+
+        st.rerun()
+
+        for i in range(5):
+            st.session_state.logs.append(create_log(f"Step {i+1} complete — {datetime.now().strftime("%H:%M:%S")}"))
+            logs_html = "".join(st.session_state.logs)
+
+            # rebuild entire HTML each time (nonce changes to force rerender)
+            terminal_placeholder.html(
+                f"""
+        {terminal_style}
+        <!-- Hidden toggle input -->
+        <input type="checkbox" id="toggleTerminal">
+
+        <!-- Terminal container -->
+            <!-- nonce: {time.time()} -->
+        <div class="terminal-container" id="terminalContainer">
+            <div class="terminal-header">
+            <!-- Label controls the checkbox -->
+            <label for="toggleTerminal" class="terminal-toggle"></label>
+            <span>Logs</span>
+            <div></div>
+            </div>
+            <div class="terminal-body" id="terminalBody">
+            {logs_html}
+            </div>
+        </div>
+        """
+            )
+
+            time.sleep(0.5)
 
 if "show_calendar" not in st.session_state:
     st.session_state.show_calendar = False
@@ -179,6 +554,21 @@ if "index" not in st.session_state:
 
 if "index_basic" not in st.session_state:
     st.session_state.index_basic = 0
+
+if "svg_code" not in st.session_state:
+    st.session_state.svg_code = "<div></div>"
+
+results_dir = Path(__file__).parent.parent / "sim" / "data" / "results" / "final_results"
+result_files = sorted(results_dir.glob("final_results_*.json"), reverse=True)
+
+if result_files:
+    with open(result_files[0], "r") as file:
+        json_data = json.loads(file.read())
+else:
+    json_data = {"smart": {}, "basic": {}}
+
+smart_data = json_data["smart"] if "smart" in json_data.keys() else None
+basic_data = json_data["basic"] if "basic" in json_data.keys() else None
 
 with st.sidebar:
     # AGENT_TYPE toggle
@@ -231,6 +621,7 @@ with st.sidebar:
 
     if insert_csv:
         st.session_state.show_calendar = False
+        st.session_state.selected_date = None
 
         uploaded_file_1 = st.file_uploader("Insert consumption data", type=["csv"], key="consumption_uploader")
         if uploaded_file_1:
@@ -261,6 +652,10 @@ with st.sidebar:
             st.rerun()
 
     if use_api:
+        st.session_state.consumption_data = None
+        st.session_state.market_data = None
+        st.session_state.solar_data = None
+        st.session_state.wind_data = None
         st.session_state.show_calendar = True
 
     calendar_placeholder = st.empty()
@@ -399,528 +794,180 @@ terminal_placeholder.html(
     </div>
     """)
 
-result_tabs = st.tabs(["Smart","Basic"])
-with result_tabs[0]:
-    col1, col2, col3= st.columns([3, 3, 3])
+if result_files:
+    result_tabs = st.tabs(["Smart","Basic","Final Results"])
+    with result_tabs[0]:
+        ems_monitor_smart(smart_data)
 
-    text_window_1 = st.empty()
-    text_window_4 = st.empty()
-    with col1:
-        st.header("Input Data")
-        text_window_1 = st.html(
-                """
-                <div style='
-                    height: 400px;
-                    background-color: #1e1e1e;
-                    color: #d4d4d4;
-                    font-family: Consolas, monospace;
-                    padding: 10px;
-                    overflow-y: auto;
-                    border-radius: 5px;
-                    border: 1px solid #333;
-                '>
-                """ + "<br>".join(st.session_state.logs) + "</div>"
-            )
+    with result_tabs[1]:
+        ems_monitor_basic(basic_data)
 
-    text_window_2 = st.empty()
-    text_window_5 = st.empty()
-    with col2:
-        st.header("Action")
-        text_window_2 = st.html(
-                """
-                <div style='
-                    height: 400px;
-                    background-color: #1e1e1e;
-                    color: #d4d4d4;
-                    font-family: Consolas, monospace;
-                    padding: 10px;
-                    overflow-y: auto;
-                    border-radius: 5px;
-                    border: 1px solid #333;
-                '>
-                """ + "<br>".join(st.session_state.logs) + "</div>"
-            )
+    with result_tabs[2]:
+        final_results = json_data["final_results"]
 
-    text_window_3 = st.empty()
-    text_window_6 = st.empty()
-    with col3:
-        st.header("Output Data")
-        text_window_3 = st.html(
-                """
-                <div style='
-                    height: 400px;
-                    background-color: #1e1e1e;
-                    color: #d4d4d4;
-                    font-family: Consolas, monospace;
-                    padding: 10px;
-                    overflow-y: auto;
-                    border-radius: 5px;
-                    border: 1px solid #333;
-                '>
-                """ + "<br>".join(st.session_state.logs) + "</div>"
-            )
-    with col2:
-        # make inner columns equal width but spacious
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c3:
-            forward_click = st.button("Fordward Step", use_container_width=True)
-        with c1:
-            backwards_click = st.button("Backward Step", use_container_width=True)
-        with c2:
-            run_simulation = st.button("Run Simulation",type="primary", use_container_width=True)
+        # 2. Format Data for Table
+        comparison_data = {
+            "Metric": ["Balance (€)", "Consumption Savings (kW)"],
+            "Smart Agent": [
+                f"{final_results['smart_agent_balance']:.2f}", 
+                f"{final_results['smart_agent_consumption_saving']:.2f}"
+            ],
+            "Basic Agent": [
+                f"{final_results['basic_agent_balance']:.2f}", 
+                f"{final_results['basic_agent_consumption_saving']:.2f}"
+            ]
+        }
 
-with result_tabs[1]:
-    col1, col2, col3= st.columns([3, 3, 3])
+        df = pd.DataFrame(comparison_data)
 
-    text_window_4 = st.empty()
-    with col1:
-        st.header("Input Data")
-        text_window_4 = st.html(
-                """
-                <div style='
-                    height: 400px;
-                    background-color: #1e1e1e;
-                    color: #d4d4d4;
-                    font-family: Consolas, monospace;
-                    padding: 10px;
-                    overflow-y: auto;
-                    border-radius: 5px;
-                    border: 1px solid #333;
-                '>
-                """ + "<br>".join(st.session_state.logs) + "</div>"
-            )
+        # 3. Display Header and Table
+        st.header("🏆 Smart vs. Basic Agent Performance")
 
-    text_window_5 = st.empty()
-    with col2:
-        st.header("Action")
-        text_window_5 = st.html(
-                """
-                <div style='
-                    height: 400px;
-                    background-color: #1e1e1e;
-                    color: #d4d4d4;
-                    font-family: Consolas, monospace;
-                    padding: 10px;
-                    overflow-y: auto;
-                    border-radius: 5px;
-                    border: 1px solid #333;
-                '>
-                """ + "<br>".join(st.session_state.logs) + "</div>"
-            )
+        # Styling the table to look professional
+        st.table(df)
 
-    text_window_6 = st.empty()
-    with col3:
-        st.header("Output Data")
-        text_window_6 = st.html(
-                """
-                <div style='
-                    height: 400px;
-                    background-color: #1e1e1e;
-                    color: #d4d4d4;
-                    font-family: Consolas, monospace;
-                    padding: 10px;
-                    overflow-y: auto;
-                    border-radius: 5px;
-                    border: 1px solid #333;
-                '>
-                """ + "<br>".join(st.session_state.logs) + "</div>"
-            )
-    with col2:
-        # make inner columns equal width but spacious
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c3:
-            forward_click_1 = st.button("Fordward Step", key="FS1",use_container_width=True)
-        with c1:
-            backwards_click_1 = st.button("Backward Step",key="BS1", use_container_width=True)
+        # 4. Impact Highlight
+        st.metric(
+            label="Balance Difference (Smart - Basic)", 
+            value=f"{final_results['agent_balance_difference']:.2f} €",
+            delta_color="inverse",
+            help=f"""
+            **Value:** `{final_results['agent_balance_difference']:.2f}`
+            - **What it is:** The direct comparison between the two agents. 
+            - A **negative** value indicates the Basic Agent outperformed the Smart Agent in this specific run.
+            """
+        )
 
-if run_simulation:
-    config = {
-    "selected_date": st.session_state.get("selected_date"),
-    "interval": st.session_state.get("interval"),
-    "max_capacity": st.session_state.get("max_capacity"),
-    "tariff": st.session_state.get("tariff"),
-    "complex_mode": st.session_state.get("complex_mode"),
-    "used_api":True if st.session_state.get("selected_date") else False
+        # 4. Impact Highlight
+        st.metric(
+            label="Total Consumption Cost", 
+            value=f"{final_results['total_consumption_cust']:.2f} €",
+            delta_color="inverse",
+            help=f"""
+            **Value:** `{final_results['total_consumption_cust']:.2f}`
+            - **What it is:** The theoretical total cost if the customer had no Solar/Battery system at all. 
+            - This serves as the 'worst-case scenario' baseline to measure how much both agents improved the situation.
+            """
+        )
+
+        st.divider()
+
+        # 5. Explanatory Tips (The "What does this mean?" section)
+        st.subheader("💡 Metric Explanations")
+
+        with st.expander("🔍 Balance"):
+            st.write("""
+            **What it is:** The net profit or loss generated by the agent during the simulation.
+            - **Smart Agent Balance:** Total revenue from selling to the grid minus costs of buying from the grid and battery usage.
+            - **Basic Agent Balance:** The benchmark performance, usually representing a standard 'dumb' strategy (e.g., just covering consumption).
+            """)
+
+        with st.expander("📊 Consumption Saving"):
+            st.write("""
+            **What it is:** The amount of energy (kW) the agent successfully diverted from the grid by using Solar or Battery power.
+            - **Higher is better:** It means the agent is maximizing self-sufficiency and reducing the home's reliance on external energy.
+            """)
+else:
+    st.warning("No result files available, run simulation first!")
+    default_data = {"00:00":{
+            "input_data": {
+                "Solar_Production": 0.0,
+                "Wind_Production": 0.0,
+                "Consumption": 0.0,
+                "Current_Capacity": 0.0,
+                "Price": 0.0
+            },
+            "Actions": [
+                {
+                    "grid_to_battery": 0
+                },
+                {
+                    "grid_to_consumption": 0
+                }
+            ],
+            "output_data": {
+                "Balance": 0,
+                "New_Capacity": 0
+            }
+        }
     }
 
-    json_data = json.dumps(config, indent=4)
+    default_final_results = {
+        "smart_agent_balance": 0,
+        "basic_agent_balance": 0,
+        "agent_balance_difference": 0,
+        "total_consumption_cust": 0,
+        "basic_agent_consumption_saving": 0,
+        "smart_agent_consumption_saving": 0
+    }
 
-    sim_manager = SimulationManager()
+    result_tabs = st.tabs(["Smart","Basic","Final Results"])
+    with result_tabs[0]:
+        ems_monitor_smart(default_data)
 
-    print(10*"-")
-    print(config)
-    print(10*"-")
+    with result_tabs[1]:
+        ems_monitor_basic(default_data)
 
-    json_res = sim_manager.start_simulation(config=config,
-                                      df_solar_production=st.session_state.solar_data,
-                                      df_wind_production=st.session_state.wind_data,
-                                      df_consumption=st.session_state.consumption_data,
-                                      df_price=st.session_state.market_data)
-    
-    print(10*"-")
-    print(json_res)
-    print(10*"-")
-    
-    st.session_state.simulation_run = True
+    with result_tabs[2]:
+        # 2. Format Data for Table
+        comparison_data = {
+            "Metric": ["Balance (€)", "Consumption Savings (kW)"],
+            "Smart Agent": [
+                f"{default_final_results['smart_agent_balance']:.2f}", 
+                f"{default_final_results['smart_agent_consumption_saving']:.2f}"
+            ],
+            "Basic Agent": [
+                f"{default_final_results['basic_agent_balance']:.2f}", 
+                f"{default_final_results['basic_agent_consumption_saving']:.2f}"
+            ]
+        }
 
-    st.rerun()
+        df = pd.DataFrame(comparison_data)
 
-    for i in range(5):
-        st.session_state.logs.append(create_log(f"Step {i+1} complete — {datetime.now().strftime("%H:%M:%S")}"))
-        logs_html = "".join(st.session_state.logs)
+        # 3. Display Header and Table
+        st.header("🏆 Smart vs. Basic Agent Performance")
 
-        # rebuild entire HTML each time (nonce changes to force rerender)
-        terminal_placeholder.html(
-            f"""
-    {terminal_style}
-    <!-- Hidden toggle input -->
-    <input type="checkbox" id="toggleTerminal">
+        # Styling the table to look professional
+        st.table(df)
 
-    <!-- Terminal container -->
-        <!-- nonce: {time.time()} -->
-    <div class="terminal-container" id="terminalContainer">
-        <div class="terminal-header">
-        <!-- Label controls the checkbox -->
-        <label for="toggleTerminal" class="terminal-toggle"></label>
-        <span>Logs</span>
-        <div></div>
-        </div>
-        <div class="terminal-body" id="terminalBody">
-        {logs_html}
-        </div>
-    </div>
-    """
-        )
-
-        time.sleep(0.5)
-
-# Get the latest final results file
-results_dir = Path(__file__).parent.parent / "sim" / "data" / "results" / "final_results"
-result_files = sorted(results_dir.glob("final_results_*.json"), reverse=True)
-
-if result_files:
-    with open(result_files[0], "r") as file:
-        json_data = json.loads(file.read())
-else:
-    json_data = {"smart": {}, "basic": {}}
-
-smart_data = json_data["smart"] if "smart" in json_data.keys() else None
-basic_data = json_data["basic"] if "basic" in json_data.keys() else None
-
-smart_keys = [i for i in smart_data.keys()]
-
-input_data = smart_data[smart_keys[0]]["input_data"].items()
-actions =[i.items() for i in smart_data[smart_keys[0]]["Actions"]]
-output_data = smart_data[smart_keys[0]]["output_data"].items()
-
-basic_keys = [i for i in basic_data.keys()]
-
-basic_input_data = basic_data[basic_keys[0]]["input_data"].items()
-basic_actions =[i.items() for i in basic_data[basic_keys[0]]["Actions"]]
-basic_output_data = basic_data[basic_keys[0]]["output_data"].items()
-
-text_window_1.html(
-        """
-        <div style='
-            height: 400px;
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            font-family: Consolas, monospace;
-            padding: 10px;
-            overflow-y: auto;
-            border-radius: 5px;
-            border: 1px solid #333;
-        '>
-        """ + "<br>".join(["Timestamp : " + smart_keys[st.session_state.index]] + [i[0] + " : " + str(i[1]) for i in input_data]) + "</div>"
-    )
-
-text_window_2.html(
-        """
-        <div style='
-            height: 400px;
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            font-family: Consolas, monospace;
-            padding: 10px;
-            overflow-y: auto;
-            border-radius: 5px;
-            border: 1px solid #333;
-        '>
-        """ + "<br>".join([j[0]  + " : " + str(j[1]) for i in actions for j in i]) + "</div>"
-    )
-
-text_window_3.html(
+        # 4. Impact Highlight
+        st.metric(
+            label="Balance Difference (Smart - Basic)", 
+            value=f"{default_final_results['agent_balance_difference']:.2f} €",
+            delta_color="inverse",
+             help=f"""
+            **Value:** `{default_final_results['agent_balance_difference']:.2f}`
+            - **What it is:** The direct comparison between the two agents. 
+            - A **negative** value indicates the Basic Agent outperformed the Smart Agent in this specific run.
             """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([i[0] + " : " + str(i[1]) for i in output_data]) + "</div>"
         )
 
-text_window_4.html(
-    """
-    <div style='
-        height: 400px;
-        background-color: #1e1e1e;
-        color: #d4d4d4;
-        font-family: Consolas, monospace;
-        padding: 10px;
-        overflow-y: auto;
-        border-radius: 5px;
-        border: 1px solid #333;
-    '>
-    """ + "<br>".join(["Timestamp : " + basic_keys[st.session_state.index_basic]] + [i[0] + " : " + str(i[1]) for i in basic_input_data]) + "</div>"
-)
-
-text_window_5.html(
-    """
-    <div style='
-        height: 400px;
-        background-color: #1e1e1e;
-        color: #d4d4d4;
-        font-family: Consolas, monospace;
-        padding: 10px;
-        overflow-y: auto;
-        border-radius: 5px;
-        border: 1px solid #333;
-    '>
-    """ + "<br>".join([j[0]  + " : " + str(j[1]) for i in basic_actions for j in i]) + "</div>"
-)
-
-text_window_6.html(
+        # 4. Impact Highlight
+        st.metric(
+            label="Total Consumption Cost", 
+            value=f"{default_final_results['total_consumption_cust']:.2f} €",
+            delta_color="inverse",
+             help=f"""
+            **Value:** `{default_final_results['total_consumption_cust']:.2f}`
+            - **What it is:** The theoretical total cost if the customer had no Solar/Battery system at all. 
+            - This serves as the 'worst-case scenario' baseline to measure how much both agents improved the situation.
             """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([i[0] + " : " + str(i[1]) for i in basic_output_data]) + "</div>"
         )
 
+        st.divider()
 
-if forward_click:
-    st.session_state.index += 1
-    input_data = smart_data[smart_keys[st.session_state.index]]["input_data"].items()
-    actions =[i.items() for i in smart_data[smart_keys[st.session_state.index]]["Actions"]]
-    output_data = smart_data[smart_keys[st.session_state.index]]["output_data"].items()
-    
-    text_window_1.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join(["Timestamp : " + smart_keys[st.session_state.index]] + [i[0] + " : " + str(i[1]) for i in input_data]) + "</div>"
-        )
-    
-    text_window_2.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([j[0]  + " : " + str(j[1]) for i in actions for j in i]) + "</div>"
-        )
-    
-    text_window_3.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([i[0] + " : " + str(i[1]) for i in output_data]) + "</div>"
-        )
+        # 5. Explanatory Tips (The "What does this mean?" section)
+        st.subheader("💡 Metric Explanations")
 
-if backwards_click:
-    st.session_state.index -= 1
-    input_data = smart_data[smart_keys[st.session_state.index]]["input_data"].items()
-    actions =[i.items() for i in smart_data[smart_keys[st.session_state.index]]["Actions"]]
-    output_data = smart_data[smart_keys[st.session_state.index]]["output_data"].items()
-    
-    text_window_1.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join(["Timestamp : " + smart_keys[st.session_state.index]] + [i[0] + " : " + str(i[1]) for i in input_data]) + "</div>"
-        )
-    
-    text_window_2.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([j[0]  + " : " + str(j[1]) for i in actions for j in i]) + "</div>"
-        )
-    
-    text_window_3.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([i[0] + " : " + str(i[1]) for i in output_data]) + "</div>"
-        )
+        with st.expander("🔍 Balance"):
+            st.write("""
+            **What it is:** The net profit or loss generated by the agent during the simulation.
+            - **Smart Agent Balance:** Total revenue from selling to the grid minus costs of buying from the grid and battery usage.
+            - **Basic Agent Balance:** The benchmark performance, usually representing a standard 'dumb' strategy (e.g., just covering consumption).
+            """)
 
-if forward_click_1:
-    st.session_state.index_basic += 1
-    basic_input_data = basic_data[basic_keys[st.session_state.index_basic]]["input_data"].items()
-    basic_actions =[i.items() for i in basic_data[basic_keys[st.session_state.index_basic]]["Actions"]]
-    basic_output_data = basic_data[basic_keys[st.session_state.index_basic]]["output_data"].items()
-    
-    text_window_1.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join(["Timestamp : " + basic_keys[st.session_state.index_basic]] + [i[0] + " : " + str(i[1]) for i in basic_input_data]) + "</div>"
-        )
-    
-    text_window_2.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([j[0]  + " : " + str(j[1]) for i in basic_actions for j in i]) + "</div>"
-        )
-    
-    text_window_3.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([i[0] + " : " + str(i[1]) for i in basic_output_data]) + "</div>"
-        )
-
-if backwards_click_1:
-    st.session_state.index_basic -= 1
-    basic_input_data = basic_data[basic_keys[st.session_state.index_basic]]["input_data"].items()
-    basic_actions =[i.items() for i in basic_data[basic_keys[st.session_state.index_basic]]["Actions"]]
-    basic_output_data = basic_data[basic_keys[st.session_state.index_basic]]["output_data"].items()
-    
-    text_window_4.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join(["Timestamp : " + basic_keys[st.session_state.index_basic]] + [i[0] + " : " + str(i[1]) for i in basic_input_data]) + "</div>"
-        )
-    
-    text_window_5.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([j[0]  + " : " + str(j[1]) for i in basic_actions for j in i]) + "</div>"
-        )
-    
-    text_window_6.html(
-            """
-            <div style='
-                height: 400px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                font-family: Consolas, monospace;
-                padding: 10px;
-                overflow-y: auto;
-                border-radius: 5px;
-                border: 1px solid #333;
-            '>
-            """ + "<br>".join([i[0] + " : " + str(i[1]) for i in basic_output_data]) + "</div>"
-        )
-
-with col3:
-    if st.session_state.simulation_run:
-        overview_button = st.button("Simulation Overview")
-
-        if overview_button:
-            # Get the latest final results file
-            results_dir = Path(__file__).parent.parent / "sim" / "data" / "results" / "final_results"
-            result_files = sorted(results_dir.glob("final_results_*.json"), reverse=True)
-            if result_files:
-                display_simulation_overview(str(result_files[0]))
+        with st.expander("📊 Consumption Saving"):
+            st.write("""
+            **What it is:** The amount of energy (kW) the agent successfully diverted from the grid by using Solar or Battery power.
+            - **Higher is better:** It means the agent is maximizing self-sufficiency and reducing the home's reliance on external energy.
+            """)
