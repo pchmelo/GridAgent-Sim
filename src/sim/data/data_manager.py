@@ -31,7 +31,7 @@ class DataManager:
 
         
     def start_data_collection(self, date: str):
-        log_controller.add_log(f"Starting data collection for date: {date}", self.log_type)
+        #log_controller.add_log(f"Starting data collection for date: {date}", self.log_type)
         self.use_api = True
 
         self.date = date
@@ -65,14 +65,14 @@ class DataManager:
 
         hour, minute = time_stamp
 
-        log_controller.add_log(f"Time stamp: {time_stamp}", self.log_type)
+        #log_controller.add_log(f"Time stamp: {time_stamp}", self.log_type)
 
         price = self.calculate_price_interval(hour, minute)
         solar_production = self.calculate_solar_production_interval(hour, minute)
         wind_production = self.calculate_wind_production_interval(hour, minute)
         consumption = self.calculate_consumption_interval(hour, minute)
 
-        log_controller.add_log(f"Price: {price}, Solar production: {solar_production}, Wind production: {wind_production}, Consumption: {consumption}", self.log_type)
+        #log_controller.add_log(f"Price: {price}, Solar production: {solar_production}, Wind production: {wind_production}, Consumption: {consumption}", self.log_type)
 
         return price, solar_production, wind_production, consumption
 
