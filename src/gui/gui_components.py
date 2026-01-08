@@ -280,32 +280,32 @@ def draw_ems_map(actions_list):
 
             <g style="{p2c_style}">
                 <path d="M140,40 L460,40" stroke="#fbbf24" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
-                <text x="300" y="30" fill="#fbbf24" class="val" text-anchor="middle">{p2c:.2f} kW</text>
+                <text x="300" y="30" fill="#fbbf24" class="val" text-anchor="middle">{p2c:.4f} kW</text>
             </g>
 
             <g style="{p2b_style}">
                 <path d="M100,90 L100,220" stroke="#fbbf24" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
-                <text x="90" y="160" fill="#fbbf24" class="val" text-anchor="middle" transform="rotate(-90, 90, 160)">{p2b:.2f} kW</text>
+                <text x="90" y="160" fill="#fbbf24" class="val" text-anchor="middle" transform="rotate(-90, 90, 160)">{p2b:.4f} kW</text>
             </g>
 
             <g style="{b2c_style}">
                 <path d="M140,240 L460,70" stroke="#00FF00" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
-                <text x="250" y="150" fill="#00FF00" class="val" transform="rotate(-28, 250, 150)">{b2c:.2f} kW</text>
+                <text x="250" y="150" fill="#00FF00" class="val" transform="rotate(-28, 250, 150)">{b2c:.4f} kW</text>
             </g>
 
             <g style="{g2c_style}">
                 <path d="M500,220 L500,90" stroke="#FACC15" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
-                <text x="515" y="160" fill="#FACC15" class="val" text-anchor="middle" transform="rotate(90, 515, 160)">{g2c:.2f} kW</text>
+                <text x="515" y="160" fill="#FACC15" class="val" text-anchor="middle" transform="rotate(90, 515, 160)">{g2c:.4f} kW</text>
             </g>
 
             <g style="{b2g_style}">
                 <path d="M140,265 L460,265" stroke="#FF4B4B" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
-                <text x="300" y="255" fill="#FF4B4B" class="val" text-anchor="middle">{b2g:.2f} kW</text>
+                <text x="300" y="255" fill="#FF4B4B" class="val" text-anchor="middle">{b2g:.4f} kW</text>
             </g>
             
             <g style="{g2b_style}">
                 <path d="M460,285 L140,285" stroke="#60A5FA" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
-                <text x="300" y="310" fill="#60A5FA" class="val" text-anchor="middle">{g2b:.2f} kW</text>
+                <text x="300" y="310" fill="#60A5FA" class="val" text-anchor="middle">{g2b:.4f} kW</text>
             </g>
         </svg>
     </div>
