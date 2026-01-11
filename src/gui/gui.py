@@ -9,9 +9,7 @@ if str(src_dir) not in sys.path:
 
 import streamlit as st
 from datetime import datetime, timedelta
-import streamlit.components.v1 as components
 import pandas as pd
-import numpy as np
 import json
 
 from sim.data.data_manager import data_manager
@@ -144,6 +142,12 @@ if "new_simulation" not in st.session_state:
 if "backgroungd_on" not in st.session_state:
     st.session_state.backgroungd_on = False
 
+if "inserting" not in st.session_state:
+    st.session_state.inserting = False
+
+if "data_inserted" not in st.session_state:
+    st.session_state.data_inserted = False
+
 results_dir = Path(__file__).parent.parent / "sim" / "data" / "results" / "final_results"
 image_dir = Path(__file__).parent.parent / "gui" / "Images"
 
@@ -223,41 +227,46 @@ if st.session_state.new_simulation:
         if insert_csv:
             st.session_state.show_calendar = False
             st.session_state.selected_date = None
-
-            uploaded_file_1 = st.file_uploader("Insert consumption data", type=["csv"], key="consumption_uploader")
-            if uploaded_file_1:
-                df = pd.read_csv(uploaded_file_1)
-                st.session_state.consumption_data = df
-                st.success("File uploaded successfully!")
-                st.rerun()
-            
-            uploaded_file_2 = st.file_uploader("Insert market price data", type=["csv"], key="market_uploader")
-            if uploaded_file_2:
-                df = pd.read_csv(uploaded_file_2)
-                st.session_state.market_data = df
-                st.success("File uploaded successfully!")
-                st.rerun()
-            
-            uploaded_file_3 = st.file_uploader("Insert solar production data", type=["csv"], key="solar_uploader")
-            if uploaded_file_3:
-                df = pd.read_csv(uploaded_file_3)
-                st.session_state.solar_data = df
-                st.success("File uploaded successfully!")
-                st.rerun()
-            
-            uploaded_file_4 = st.file_uploader("Insert wind production data", type=["csv"], key="wind_uploader")
-            if uploaded_file_4:
-                df = pd.read_csv(uploaded_file_4)
-                st.session_state.wind_data = df
-                st.success("File uploaded successfully!")
-                st.rerun()
+            st.session_state.inserting = True
 
         if use_api:
             st.session_state.consumption_data = None
             st.session_state.market_data = None
             st.session_state.solar_data = None
             st.session_state.wind_data = None
+            st.session_state.inserting = False
+            st.session_state.data_inserted = False
             st.session_state.show_calendar = True
+
+        if st.session_state.inserting:
+            uploaded_file_1 = st.file_uploader("Insert consumption data", type=["csv"], key="consumption_uploader")
+            if uploaded_file_1:
+                df = pd.read_csv(uploaded_file_1)
+                st.session_state.consumption_data = df
+                st.success("File uploaded successfully!")
+            
+            uploaded_file_2 = st.file_uploader("Insert market price data", type=["csv"], key="market_uploader")
+            if uploaded_file_2:
+                df = pd.read_csv(uploaded_file_2)
+                st.session_state.market_data = df
+                st.success("File uploaded successfully!")
+            
+            uploaded_file_3 = st.file_uploader("Insert solar production data", type=["csv"], key="solar_uploader")
+            if uploaded_file_3:
+                df = pd.read_csv(uploaded_file_3)
+                st.session_state.solar_data = df
+                st.success("File uploaded successfully!")
+            
+            uploaded_file_4 = st.file_uploader("Insert wind production data", type=["csv"], key="wind_uploader")
+            if uploaded_file_4:
+                df = pd.read_csv(uploaded_file_4)
+                st.session_state.wind_data = df
+                st.success("File uploaded successfully!")
+            
+            if (uploaded_file_1 != None) and (uploaded_file_2 != None) and (uploaded_file_3 != None) and  (uploaded_file_4 != None):
+                st.session_state.inserting = False
+                st.session_state.data_inserted = True
+                st.rerun()
 
         calendar_placeholder = st.empty()
 
@@ -288,18 +297,16 @@ if st.session_state.new_simulation:
                         confirm_collection_modal(selected_date)
 
         #Check if all the needed data was introduced
-        if (st.session_state.selected_date != None) or (st.session_state.consumption_data != None and st.session_state.market_data != None and st.session_state.solar_data != None and st.session_state.wind_data != None):
+        if (st.session_state.selected_date != None) or st.session_state.data_inserted:
                 #Print the input data
                 if st.session_state.selected_date != None:
-                    st.session_state.inserting_data = False
                     st.session_state.interval = interval
                     st.session_state.max_capacity = max_capacity
                     st.session_state.tariff = tariff
                     st.info(f"Data Loaded: \n\n Selected date: {st.session_state.selected_date} \n\n Interval: {st.session_state.interval} minutes \n\n Max Capacity: {st.session_state.max_capacity} kWh \n\n Tariff: {st.session_state.tariff}%")
 
                 #Print the input data
-                if (st.session_state.consumption_data != None and st.session_state.market_data != None and st.session_state.solar_data != None and st.session_state.wind_data != None):
-                    st.session_state.inserting_data = False
+                if st.session_state.data_inserted:
                     st.session_state.interval = interval
                     st.session_state.max_capacity = max_capacity
                     st.session_state.tariff = tariff
