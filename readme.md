@@ -1,4 +1,4 @@
-# MS Household Energy Production
+# GridAgent-Sim
 The MS Household Energy Production project is a comprehensive simulation framework designed to evaluate Reinforcement Learning (RL) agents against baseline strategies for household energy management. By integrating a Mesa-based agent simulation with Stable-Baselines3 (SAC) and a Streamlit dashboard, the system provides a full pipeline from data ingestion to interactive visualization. Whether you are synthesizing realistic demand patterns through the REN API or orchestrating complex agent interactions within the HEMSModel, the project logic ensures a seamless flow of data from raw time-series inputs to the decision-making matrices of the smart agent.
 
 ## Features
