@@ -13,7 +13,7 @@ interval_str = os.getenv("INTERVAL", "1,0")
 hour_interval, minute_interval = map(int, interval_str.split(","))
 
 class HEMSEnvironment(gym.Env):
-    """Custom Gymnasium Environment for Home Energy Management System using SAC"""
+    """HEMS Environment with improved arbitrage reward function"""
     
     metadata = {"render_modes": []}
     
@@ -26,9 +26,8 @@ class HEMSEnvironment(gym.Env):
         self.tariff = tariff
         self.hour_interval = hour_interval
         self.minute_interval = minute_interval
-        self.date = date  # Add date parameter
+        self.date = date
         
-        # Create a separate data manager instance for this environment
         if date:
             self.data_manager = DataManager(date=date)
             self.data_manager.start_data_collection(date)
@@ -36,7 +35,6 @@ class HEMSEnvironment(gym.Env):
             from sim.data.data_manager import data_manager
             self.data_manager = data_manager
         
-        # Calculate max steps based on interval
         if max_steps is None:
             total_minutes_per_day = 24 * 60
             interval_minutes = hour_interval * 60 + minute_interval
@@ -45,30 +43,23 @@ class HEMSEnvironment(gym.Env):
             self.max_steps = max_steps
         
         self.current_step = 0
+        self.price_history = []
+        self.avg_price = 0.0
+        self.min_price_seen = float('inf')
+        self.max_price_seen = 0.0
+        self.battery_cost_basis = 0.0
         
-        # Action space: continuous values [0, 1] for allocation percentages
-        # [prod_to_cons_pct, prod_to_battery_pct, prod_to_grid_pct, 
-        #  battery_to_cons_pct, battery_to_grid_pct, grid_to_battery_pct, grid_to_cons_pct]
-        self.action_space = spaces.Box(
-            low=0.0, 
-            high=1.0, 
-            shape=(7,), 
-            dtype=np.float32
-        )
+        self.action_space = spaces.Box(low=0.0, high=1.0, shape=(7,), dtype=np.float32)
         
-        # Observation space: 
-        # [battery_level_normalized, price_normalized, solar_production_normalized, consumption_normalized,
-        #  hour_sin, hour_cos, minute_sin, minute_cos, price_high_signal, price_low_signal]
         self.observation_space = spaces.Box(
-            low=np.array([0, 0, 0, 0, -1, -1, -1, -1, 0, 0]),
+            low=np.array([0, 0, 0, 0, -1, -1, 0, 0, 0, 0]),
             high=np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
             dtype=np.float32
         )
         
-        # Normalization constants (ADJUST BASED ON DATA!!!)
-        self.max_price = 1.0  # €/kWh
-        self.max_production = 10.0  # kW
-        self.max_consumption = 10.0  # kW
+        self.max_price = 0.5
+        self.max_production = 5.0
+        self.max_consumption = 3.0
         
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -77,28 +68,43 @@ class HEMSEnvironment(gym.Env):
         self.cur_capacity = 0
         self.balance = 0.0
         self.time_stamp = (0, 0)
+        self.price_history = []
+        self.avg_price = 0.0
+        self.min_price_seen = float('inf')
+        self.max_price_seen = 0.0
+        self.battery_cost_basis = 0.0
         
         return self._get_observation(), {}
     
     def _get_observation(self):
         price, solar, wind, consumption = self.data_manager.get_model_data_entry(time_stamp=self.time_stamp)
         
-        # Normalize values
         battery_normalized = self.cur_capacity / self.battery_max_capacity
-        price_normalized = min(price / self.max_price, 1.0)
-        solar_normalized = min(solar / self.max_production, 1.0)
-        consumption_normalized = min(consumption / self.max_consumption, 1.0)
+        price_normalized = np.clip(price / self.max_price, 0, 1)
+        solar_normalized = np.clip(solar / self.max_production, 0, 1)
+        consumption_normalized = np.clip(consumption / self.max_consumption, 0, 1)
         
-        # Cyclical time encoding
-        hour, minute = self.time_stamp
+        hour, _ = self.time_stamp
         hour_sin = np.sin(2 * np.pi * hour / 24)
         hour_cos = np.cos(2 * np.pi * hour / 24)
-        minute_sin = np.sin(2 * np.pi * minute / 60)
-        minute_cos = np.cos(2 * np.pi * minute / 60)
         
-        # Price indicators
-        price_high_signal = 1.0 if price > 0.08 else 0.0
-        price_low_signal = 1.0 if price < 0.04 else 0.0
+        if len(self.price_history) > 0:
+            price_vs_avg = np.clip((price - self.avg_price) / (self.avg_price + 0.01) + 0.5, 0, 1)
+        else:
+            price_vs_avg = 0.5
+        
+        if self.cur_capacity > 0 and self.battery_cost_basis > 0:
+            battery_value = np.clip((price * self.tariff - self.battery_cost_basis) / (self.battery_cost_basis + 0.01) + 0.5, 0, 1)
+        else:
+            battery_value = 0.5
+        
+        if len(self.price_history) >= 3:
+            recent_trend = (price - self.price_history[-3]) / (self.avg_price + 0.01)
+            price_trend = np.clip(recent_trend + 0.5, 0, 1)
+        else:
+            price_trend = 0.5
+        
+        remaining_hours = (self.max_steps - self.current_step) / self.max_steps
         
         return np.array([
             battery_normalized,
@@ -107,10 +113,10 @@ class HEMSEnvironment(gym.Env):
             consumption_normalized,
             hour_sin,
             hour_cos,
-            minute_sin,
-            minute_cos,
-            price_high_signal,
-            price_low_signal,
+            price_vs_avg,
+            battery_value,
+            price_trend,
+            remaining_hours,
         ], dtype=np.float32)
     
     def _update_time(self):
@@ -126,12 +132,22 @@ class HEMSEnvironment(gym.Env):
         
         self.time_stamp = (hour, minute)
     
+    def _get_price_percentile(self, price):
+        """Calculate where current price falls in the day's price range"""
+        if self.max_price_seen <= self.min_price_seen:
+            return 0.5
+        return (price - self.min_price_seen) / (self.max_price_seen - self.min_price_seen)
+    
     def step(self, action):
         price, solar, wind, consumption = self.data_manager.get_model_data_entry(
             time_stamp=self.time_stamp
         )
         
-        # Extract action percentages
+        self.price_history.append(price)
+        self.avg_price = np.mean(self.price_history)
+        self.min_price_seen = min(self.min_price_seen, price)
+        self.max_price_seen = max(self.max_price_seen, price)
+        
         prod_to_cons_pct = action[0]
         prod_to_battery_pct = action[1]
         prod_to_grid_pct = action[2]
@@ -140,116 +156,138 @@ class HEMSEnvironment(gym.Env):
         grid_to_battery_pct = action[5]
         grid_to_cons_pct = action[6]
         
-        # Phase 1: Production allocation
+        battery_before = self.cur_capacity
+        
         production_to_consumption = min(prod_to_cons_pct * consumption, solar, consumption)
         remaining_production = solar - production_to_consumption
         remaining_consumption = consumption - production_to_consumption
         
-        # Production to battery
         max_battery_charge = self.battery_max_capacity - self.cur_capacity
         production_to_battery = min(prod_to_battery_pct * max_battery_charge, remaining_production)
         remaining_production -= production_to_battery
         
-        # Production to grid
-        production_to_grid = min(prod_to_grid_pct * remaining_production, remaining_production)
+        production_to_grid = remaining_production
         
-        # Phase 2: Battery allocation
-        # Battery to consumption
         battery_to_consumption = min(battery_to_cons_pct * self.cur_capacity, 
                                     remaining_consumption, self.cur_capacity)
         remaining_consumption -= battery_to_consumption
         remaining_battery = self.cur_capacity - battery_to_consumption
         
-        # Battery to grid (sell stored energy)
         battery_to_grid = min(battery_to_grid_pct * remaining_battery, remaining_battery)
         
-        # Phase 3: Grid allocation
-        # Grid to battery (buy cheap energy to store)
-        max_battery_charge_remaining = self.battery_max_capacity - (self.cur_capacity + production_to_battery - battery_to_consumption - battery_to_grid)
+        max_battery_charge_remaining = self.battery_max_capacity - (
+            self.cur_capacity + production_to_battery - battery_to_consumption - battery_to_grid
+        )
         grid_to_battery = grid_to_battery_pct * max(0, max_battery_charge_remaining)
+        grid_to_consumption = max(0, remaining_consumption)
         
-        # Grid to consumption (buy energy for immediate use)
-        grid_to_consumption = min(grid_to_cons_pct * remaining_consumption, remaining_consumption)
+        energy_sold = production_to_grid + battery_to_grid
+        energy_bought = grid_to_consumption + grid_to_battery
         
-        # Calculate rewards and penalties
-        reward = 0
-        penalty = 0
+        revenue = energy_sold * price * self.tariff
+        cost = energy_bought * price
+        step_profit = revenue - cost
         
-        # Revenue from selling to grid
-        revenue_from_production = production_to_grid * price * self.tariff
-        revenue_from_battery = battery_to_grid * price * self.tariff
-        total_revenue = revenue_from_production + revenue_from_battery
+        energy_added = production_to_battery + grid_to_battery
+        energy_removed = battery_to_consumption + battery_to_grid
         
-        # Cost from buying from grid
-        cost_for_consumption = grid_to_consumption * price
-        cost_for_battery = grid_to_battery * price
-        total_cost = cost_for_consumption + cost_for_battery
+        if energy_added > 0:
+            solar_opportunity_cost = production_to_battery * price * self.tariff
+            grid_purchase_cost = grid_to_battery * price
+            new_energy_cost = (solar_opportunity_cost + grid_purchase_cost) / energy_added
+            
+            if self.cur_capacity > 0:
+                total_energy = self.cur_capacity + energy_added
+                self.battery_cost_basis = (
+                    self.battery_cost_basis * self.cur_capacity + 
+                    new_energy_cost * energy_added
+                ) / total_energy
+            else:
+                self.battery_cost_basis = new_energy_cost
         
-        # Penalty for unmet consumption (CRITICAL)
-        unmet_consumption = consumption - (production_to_consumption + battery_to_consumption + grid_to_consumption)
-        if unmet_consumption > 0.01:
-            penalty += 1000 * unmet_consumption
-        
-        # Penalty for wasted production
-        wasted_production = solar - (production_to_consumption + production_to_battery + production_to_grid)
-        if wasted_production > 0.01:
-            penalty += 100 * wasted_production
-        
-        # Penalty for buying expensive energy to charge battery
-        if price > 0.05 and grid_to_battery > 0:
-            penalty += 50 * grid_to_battery * price
-        
-        # Update battery capacity
         battery_net_change = production_to_battery + grid_to_battery - battery_to_consumption - battery_to_grid
-        self.cur_capacity += battery_net_change
-        self.cur_capacity = np.clip(self.cur_capacity, 0, self.battery_max_capacity)
+        self.cur_capacity = np.clip(self.cur_capacity + battery_net_change, 0, self.battery_max_capacity)
         
-        # Update balance
-        self.balance += total_revenue - total_cost
+        self.balance += step_profit
         
-        # Update time and step
         self._update_time()
         self.current_step += 1
         
-        # Check if episode is done
         terminated = self.current_step >= self.max_steps
         truncated = False
         
-        # END-OF-DAY PENALTY: Penalize unused battery capacity
-        # Battery has value only if used - storing energy at end of day is wasted opportunity
-        end_of_day_penalty = 0
+        price_percentile = self._get_price_percentile(price)
+        
+        # === REWARD FUNCTION ===
+        reward = 0.0
+        
+        # Component 1: Scaled base profit
+        reward += step_profit * 10
+        
+        # Component 2: Arbitrage reward with continuous scaling
+        if battery_to_grid > 0 and self.battery_cost_basis > 0:
+            sell_price = price * self.tariff
+            margin = (sell_price - self.battery_cost_basis) / (self.battery_cost_basis + 0.001)
+            arbitrage_reward = margin * battery_to_grid * 5
+            reward += arbitrage_reward
+        
+        # Component 3: Continuous price-aware charging reward
+        if grid_to_battery > 0:
+            # Reward buying at low prices, penalize buying at high prices
+            charging_quality = (0.5 - price_percentile) * 2
+            reward += charging_quality * grid_to_battery * 2
+        
+        # Component 4: Continuous price-aware selling reward
+        if battery_to_grid > 0:
+            # Reward selling at high prices, penalize selling at low prices
+            selling_quality = (price_percentile - 0.5) * 2
+            reward += selling_quality * battery_to_grid * 2
+        
+        # Component 5: Strategic battery holding reward
+        # Reward holding battery when price is low (anticipate higher prices)
+        if self.cur_capacity > 0 and price_percentile < 0.3:
+            hold_reward = self.cur_capacity * 0.05 * (0.3 - price_percentile)
+            reward += hold_reward
+        
+        # Component 6: Penalize holding full battery when price is high
+        if self.cur_capacity > self.battery_max_capacity * 0.8 and price_percentile > 0.7:
+            hold_penalty = -0.1 * (price_percentile - 0.7) * self.cur_capacity
+            reward += hold_penalty
+        
+        # Component 7: Reward using battery instead of buying from grid
+        if battery_to_consumption > 0:
+            # Avoided cost
+            avoided_cost = battery_to_consumption * price
+            reward += avoided_cost * 0.5
+        
+        # Component 8: End of day evaluation
         if terminated:
-            # Penalize remaining battery capacity (lost profit opportunity)
-            # Assume average price for selling
-            avg_price = 0.07
-            opportunity_loss = self.cur_capacity * avg_price * self.tariff
-            end_of_day_penalty = opportunity_loss * 50
-            penalty += end_of_day_penalty
-        
-        # Reward selling battery when prices are high
-        price_threshold = 0.08
-        if price > price_threshold and battery_to_grid > 0:
-            reward += battery_to_grid * (price - price_threshold) * 200
-        
-        # Reward buying/storing when prices are low
-        low_price_threshold = 0.04
-        if price < low_price_threshold and grid_to_battery > 0:
-            reward += grid_to_battery * (low_price_threshold - price) * 100
-        
-        # Final reward calculation
-        profit = total_revenue - total_cost
-        reward = profit * 10_000 - penalty + reward
+            # Value remaining battery, penalize if it held too much
+            battery_value = self.cur_capacity * self.avg_price * self.tariff
+            
+            # If battery is more than 50% full at end, missed selling opportunities
+            if self.cur_capacity > self.battery_max_capacity * 0.5:
+                missed_opportunity_penalty = (self.cur_capacity - self.battery_max_capacity * 0.5) * self.max_price_seen * self.tariff * 0.3
+                reward += battery_value * 0.3 - missed_opportunity_penalty
+            else:
+                reward += battery_value * 0.5
+            
+            # Bonus for ending with positive balance
+            if self.balance > 0:
+                reward += self.balance * 2
         
         info = {
             "balance": self.balance,
             "battery_level": self.cur_capacity,
-            "unmet_consumption": unmet_consumption,
-            "total_revenue": total_revenue,
-            "total_cost": total_cost,
-            "production_to_grid": production_to_grid,
-            "battery_to_grid": battery_to_grid,
-            "grid_to_battery": grid_to_battery,
-            "end_of_day_penalty": end_of_day_penalty if terminated else 0,
+            "step_profit": step_profit,
+            "revenue": revenue,
+            "cost": cost,
+            "price": price,
+            "avg_price": self.avg_price,
+            "price_percentile": price_percentile,
+            "battery_cost_basis": self.battery_cost_basis,
+            "energy_sold": energy_sold,
+            "energy_bought": energy_bought,
         }
         
         return self._get_observation(), reward, terminated, truncated, info

@@ -63,3 +63,19 @@ class SimulationConfigs:
 
         if self.battery_max_capacity is None or self.battery_max_capacity <= 0:
             self.battery_max_capacity = 10
+
+        if self.selected_date is None:
+            log_controller.add_log("No selected date provided in config, defaulting to None", "simulation")
+            if df_consumption is None or df_consumption.empty:
+                log_controller.add_log("No consumption data provided", "simulation")
+            else:
+                log_controller.add_log("First row of consumption data: " + str(df_consumption.iloc[0]), "simulation")
+            if df_price is None or df_price.empty:
+                log_controller.add_log("No price data provided", "simulation")
+            else:
+                log_controller.add_log("First row of price data: " + str(df_price.iloc[0]), "simulation")
+            if df_solar_production is None or df_solar_production.empty:
+                log_controller.add_log("No solar production data provided", "simulation")
+            else:
+                log_controller.add_log("First row of solar production data: " + str(df_solar_production.iloc[0]), "simulation")
+    

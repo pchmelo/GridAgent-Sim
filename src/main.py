@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from sim.data.json_result_manager import json_result_manager
-from sim.agent.smart.train import train_sac_agent
+from sim.agent.smart.train import train_sac_agent, train_single_season
 
 load_dotenv()
 
@@ -32,20 +32,26 @@ if __name__ == "__main__":
         json_result_manager.calculate_final_results()
 
     elif mode == "train":
-
         train_sac_agent(
-            total_timesteps=1_000_000,
+            total_timesteps=500_000,
             use_gpu=True,
             n_envs=4,
-            resume_from="src/sim/agent/smart/models/best_model.zip"
+            resume_from=None
         )
+    
+    elif mode == "train_single":
+        train_single_season(
+            season="summer",
+            total_timesteps=100_000,
+            use_gpu=True
+        )
+
     elif mode == "gui_mode":
         import subprocess
         import sys
         
-        # Launch Streamlit GUI
         gui_path = os.path.join(os.path.dirname(__file__), "gui", "gui.py")
         subprocess.run([sys.executable, "-m", "streamlit", "run", gui_path])
 
     else:
-        print("Invalid MODE in .env file. Please set MODE to 'run_model', 'train', or 'gui_mode'.")
+        print("Invalid MODE in .env file. Please set MODE to 'run_model', 'train', 'train_single', or 'gui_mode'.")

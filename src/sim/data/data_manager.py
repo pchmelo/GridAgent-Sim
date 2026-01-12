@@ -31,7 +31,7 @@ class DataManager:
 
         
     def start_data_collection(self, date: str):
-        log_controller.add_log(f"Starting data collection for date: {date}", self.log_type)
+        #log_controller.add_log(f"Starting data collection for date: {date}", self.log_type)
         self.use_api = True
 
         self.date = date
@@ -65,14 +65,14 @@ class DataManager:
 
         hour, minute = time_stamp
 
-        log_controller.add_log(f"Time stamp: {time_stamp}", self.log_type)
+        #log_controller.add_log(f"Time stamp: {time_stamp}", self.log_type)
 
         price = self.calculate_price_interval(hour, minute)
         solar_production = self.calculate_solar_production_interval(hour, minute)
         wind_production = self.calculate_wind_production_interval(hour, minute)
         consumption = self.calculate_consumption_interval(hour, minute)
 
-        log_controller.add_log(f"Price: {price}, Solar production: {solar_production}, Wind production: {wind_production}, Consumption: {consumption}", self.log_type)
+        #log_controller.add_log(f"Price: {price}, Solar production: {solar_production}, Wind production: {wind_production}, Consumption: {consumption}", self.log_type)
 
         return price, solar_production, wind_production, consumption
 
@@ -335,11 +335,22 @@ class DataManager:
     
     def set_dataframes(self, df_price, df_solar, df_wind, df_consumption):
         self.use_api = False
+        self.last_time_stamp = (0, 0)
 
-        self.df_price_data = df_price
-        self.df_solar_production = df_solar
-        self.df_wind_production = df_wind
-        self.df_consumption = df_consumption
+        self.df_price_data = df_price.copy()
+        self.df_solar_production = df_solar.copy()
+        self.df_wind_production = df_wind.copy()
+        self.df_consumption = df_consumption.copy()
+        
+        def parse_time_with_24(time_str):
+            hour, minute = map(int, time_str.split(':'))
+            total_minutes = hour * 60 + minute
+            return total_minutes
+        
+        self.df_solar_production['total_minutes'] = self.df_solar_production.iloc[:, 0].apply(parse_time_with_24)
+        self.df_wind_production['total_minutes'] = self.df_wind_production.iloc[:, 0].apply(parse_time_with_24)
+        self.df_price_data['total_minutes'] = self.df_price_data.iloc[:, 0].apply(parse_time_with_24)
+        self.df_consumption['total_minutes'] = self.df_consumption.iloc[:, 0].apply(parse_time_with_24)
 
 
 data_manager = DataManager()

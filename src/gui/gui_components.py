@@ -286,16 +286,19 @@ def draw_ems_map(actions_list):
             <g style="{p2b_style}">
                 <path d="M100,90 L100,220" stroke="#fbbf24" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
                 <text x="90" y="160" fill="#fbbf24" class="val" text-anchor="middle" transform="rotate(-90, 90, 160)">{p2b:.2f} kWh</text>
+
             </g>
 
             <g style="{b2c_style}">
                 <path d="M140,240 L460,70" stroke="#00FF00" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
                 <text x="250" y="150" fill="#00FF00" class="val" transform="rotate(-28, 250, 150)">{b2c:.2f} kWh</text>
+
             </g>
 
             <g style="{g2c_style}">
                 <path d="M500,220 L500,90" stroke="#FACC15" stroke-width="3" fill="none" class="flow-line" marker-end="url(#arrow)" />
                 <text x="515" y="160" fill="#FACC15" class="val" text-anchor="middle" transform="rotate(90, 515, 160)">{g2c:.2f} h</text>
+
             </g>
 
             <g style="{b2g_style}">
