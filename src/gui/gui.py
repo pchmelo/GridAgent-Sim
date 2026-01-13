@@ -155,7 +155,7 @@ with homescreen.container():
     set_background()
     _,cw,_ = st.columns([1,6,1])
     with cw:
-        st.title("EMS-Sim: Energy Management System Simulator")
+        st.title("GridAgent-Sim: Household Energy Management Simulation")
         _,cy,cz,_= st.columns([1,1,1,1])
         with cz:
             st.image(f"{image_dir}\LogotipoSI-759468593.png",width=250)
